@@ -1,0 +1,62 @@
+<body>
+
+<h2>Student Registration Form</h2>
+
+<form id="registerForm">
+    <input type="text" id="name" placeholder="Username">
+    <br><br>
+    <input type="email" id="email" placeholder="Email">
+    <br><br>
+    <input type="password" id="password" placeholder="Password">
+    <br><br>
+    <input type="text" id="phone" placeholder="Phone Number">
+    <br><br>
+    <select name="department" id="department">
+        <option value="">Select Department</option>
+        <option value="Computer Science">Information Technology</option>
+        <option value="Mathematics">Accounting</option>
+        <option value="Physics">Management</option>
+        <option value="Chemistry">Psychology</option>
+    </select>
+    <br><br>
+    <select name="Year" id="year">
+        <option value="">Select Year</option>
+        <option value="1">1st Year</option>
+        <option value="2">2nd Year</option>
+        <option value="3">3rd Year</option>
+        <option value="4">4th Year</option>
+    </select>
+    <br><br>
+    <button type="submit">Submit</button>
+</form>
+
+<script>
+    document.getElementById("registerForm").addEventListener("submit", function(event) {
+        event.preventDefault();
+        
+        const userData = {
+            username: document.getElementById("name").value,
+            email: document.getElementById("email").value,
+            password: document.getElementById("password").value,
+            phone_number: document.getElementById("phone").value,
+            department: document.getElementById("department").value,
+            year: document.getElementById("year").value,
+            usertype: "student"
+        };
+
+        fetch("/add/student", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(userData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            alert(data.message);
+        })
+        .catch(error => {
+            console.error("Error:", error);
+        });
+    });
+</script>

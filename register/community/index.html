@@ -1,0 +1,52 @@
+<body>
+
+<h2>Community Registration Form</h2>
+
+<form id="registerForm">
+    <input type="text" id="name" placeholder="Username">
+    <br><br>
+    <input type="email" id="email" placeholder="Email">
+    <br><br>
+    <input type="password" id="password" placeholder="Password">
+    <br><br>
+    <input type="text" id="phone" placeholder="Phone Number">
+    <br><br>
+    <select name="role" id="role">
+        <option value="">Select Role</option>
+        <option value="volunteer">Volunteer</option>
+        <option value="organizer">Organizer</option>
+        <option value="member">Member</option>
+    </select>
+    <br><br>
+    <button type="submit">Submit</button>
+</form>
+
+<script>
+    document.getElementById("registerForm").addEventListener("submit", function(event) {
+        event.preventDefault();
+        
+        const userData = {
+            username: document.getElementById("name").value,
+            email: document.getElementById("email").value,
+            password: document.getElementById("password").value,
+            phone_number: document.getElementById("phone").value,
+            department: document.getElementById("role").value,
+            usertype: "community"
+        };
+
+        fetch("/add/community", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(userData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            alert(data.message);
+        })
+        .catch(error => {
+            console.error("Error:", error);
+        });
+    });
+</script>
