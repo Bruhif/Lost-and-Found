@@ -1,7 +1,9 @@
 from flask import Flask, render_template, request, jsonify
+from flask_cors import CORS
 import psycopg2
 
 app = Flask(__name__)
+CORS(app)
 
 DB_CONFIG = {
     "host": "100.121.226.108",
@@ -17,7 +19,10 @@ def get_connection():
 
 @app.route("/")
 def home():
-    return render_template("index.html")
+    return jsonify({
+        "success": True,
+        "message": "Welcome to the Flask backend!"
+    })
 
 @app.route("/register/student")
 def register_student():
@@ -30,6 +35,13 @@ def register_lecturer():
 @app.route("/register/community")
 def register_community():
     return render_template("community.html")
+
+@app.route("/test", methods=["GET"])
+def test():
+    return jsonify({
+        "success": True,
+        "message": "Flask backend is working!"
+    })
 
 
 @app.route("/add/student", methods=["POST"])

@@ -32,6 +32,11 @@
         <button>Register as a Community Member</button>
     </a>
 
+    <button onclick="testFlask()">Test Flask Connection</button>
+
+    <p id="result"></p>
+
+
 </body>
 </html>
 
@@ -71,4 +76,18 @@
             console.error("Error:", error);
         });
     });
+
+    function testFlask() {
+        fetch("https://legion-is-here.tail208289.ts.net/test")
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById("result").textContent = data.message;
+            })
+            .catch(error => {
+                console.error(error);
+                document.getElementById("result").textContent =
+                    "Failed to connect to Flask";
+            });
+    }
+
 </script>
