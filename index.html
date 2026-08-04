@@ -20,15 +20,15 @@
 
     <p>haven't registered yet?</p>
 
-    <a href="/register/student">
+    <a href="https://bruhif.github.io/register/student">
         <button>Register as a Student</button>
     </a><br><br>
     
-    <a href="/register/lecturer">
+    <a href="https://bruhif.github.io/register/lecturer">
         <button>Register as a Lecturer</button>
     </a><br><br>
 
-    <a href="/register/community">
+    <a href="https://bruhif.github.io/register/community">
         <button>Register as a Community Member</button>
     </a>
 
@@ -44,7 +44,7 @@
             password: document.getElementById("password").value
         };
 
-        fetch("/login", {
+        fetch("https://bruhif.github.io/login", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json"
@@ -57,11 +57,11 @@
                 alert(data.message);
                 // Redirect to the appropriate dashboard based on user type
                 if (data.usertype === "student") {
-                    window.location.href = "/dashboard/student";
+                    window.location.href = "https://bruhif.github.io/dashboard/student";
                 } else if (data.usertype === "lecturer") {
-                    window.location.href = "/dashboard/lecturer";
+                    window.location.href = "https://bruhif.github.io/dashboard/lecturer";
                 } else if (data.usertype === "community") {
-                    window.location.href = "/dashboard/community";
+                    window.location.href = "https://bruhif.github.io/dashboard/community";
                 }
             } else {
                 alert(data.message);
