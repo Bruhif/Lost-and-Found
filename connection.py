@@ -26,18 +26,6 @@ def home():
         "message": "Welcome to the Flask backend!"
     })
 
-@app.route("/register/student")
-def register_student():
-    return render_template("student.html")
-
-@app.route("/register/lecturer")
-def register_lecturer():    
-    return render_template("lecturer.html")
-
-@app.route("/register/community")
-def register_community():
-    return render_template("community.html")
-
 @app.route("/test", methods=["GET"])
 def test():
     return jsonify({

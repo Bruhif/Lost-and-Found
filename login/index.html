@@ -1,0 +1,71 @@
+<body>
+    <h1>Welcome to Lost and Found App</h1>
+
+    <h2>Login</h2>
+
+    <form id="loginForm">
+        <input type="text" id="username" placeholder="Username" required>
+        <br><br>
+        <input type="password" id="password" placeholder="Password" required>
+        <br><br>
+        <button type="submit">Login</button>
+    </form>
+
+    <a href="../register/">haven't registered yet?</a><br><br>
+
+    <button onclick="testFlask()">Test Flask Connection</button>
+
+    <p id="result"></p>
+
+</body>
+
+<script>
+    document.getElementById("loginForm").addEventListener("submit", function(event) {
+        event.preventDefault();
+        
+        const loginData = {
+            username: document.getElementById("username").value,
+            password: document.getElementById("password").value
+        };
+
+        fetch("https://legion-is-here.tail208289.ts.net/login", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(loginData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                // Redirect to the appropriate dashboard based on user type
+                if (data.usertype === "student") {
+                    window.location.href = "https://bruhif.github.io/dashboard/student";
+                } else if (data.usertype === "lecturer") {
+                    window.location.href = "https://bruhif.github.io/dashboard/lecturer";
+                } else if (data.usertype === "community") {
+                    window.location.href = "https://bruhif.github.io/dashboard/community";
+                }
+            } else {
+                alert(data.message);
+            }
+        })
+        .catch(error => {
+            console.error("Error:", error);
+        });
+    });
+
+        function testFlask() {
+        fetch("https://legion-is-here.tail208289.ts.net/test")
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById("result").textContent = data.message;
+            })
+            .catch(error => {
+                console.error(error);
+                document.getElementById("result").textContent =
+                    "Failed to connect to Flask";
+            });
+    }
+</script>
