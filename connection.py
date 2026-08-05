@@ -1,3 +1,5 @@
+import email
+
 from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 import psycopg2
@@ -43,6 +45,50 @@ def test():
         "message": "Flask backend is working!"
     })
 
+@app.route("/login", methods=["POST"])
+def login():
+    data = request.get_json()
+
+    username = data.get("username")
+    password = data.get("password")
+
+    if not username or not password:
+        return jsonify({"error": "Username and password are required"}), 400
+
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        query = """
+            SELECT userid, username, email, usertype
+            FROM Users
+            WHERE username = %s AND password = %s;
+        """
+
+        cursor.execute(query, (username, password))
+        user = cursor.fetchone()
+
+        cursor.close()
+        conn.close()
+
+        if user:
+            return jsonify({
+                "success": True,
+                "user": {
+                    "id": user[0],
+                    "name": user[1],
+                    "email": user[2],
+                    "usertype": user[3]
+                }
+            })
+        else:
+            return jsonify({"success": False, "error": "Invalid credentials"}), 401
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
 
 @app.route("/add/student", methods=["POST"])
 def add_student():
