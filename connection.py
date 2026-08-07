@@ -105,6 +105,17 @@ def add_student():
         conn = get_connection()
         cursor = conn.cursor()
 
+        s2fa = input("insert data to student table? (y/n): ")
+
+        if s2fa.lower() != "y":
+            cursor.close()
+            conn.close()
+
+            return jsonify({
+                "success": False,
+                "error": "user creation aborted by admin"
+            }), 400
+
         userquery = """
             INSERT INTO Users (username, email, password, phone_number, usertype)
             VALUES (%s, %s, %s, %s, %s)
@@ -182,6 +193,17 @@ def add_lecturer():
         conn = get_connection()
         cursor = conn.cursor()
 
+        l2fa = input("insert data to lecturer table? (y/n): ")
+
+        if l2fa.lower() != "y":
+            cursor.close()
+            conn.close()
+
+            return jsonify({
+                "success": False,
+                "error": "user creation aborted by admin"
+            }), 400
+
         userquery = """
             INSERT INTO Users (username, email, password, phone_number, usertype)
             VALUES (%s, %s, %s, %s, %s)
@@ -257,6 +279,17 @@ def add_community():
     try:
         conn = get_connection()
         cursor = conn.cursor()
+
+        c2fa = input("insert data to community table? (y/n): ")
+
+        if c2fa.lower() != "y":
+            cursor.close()
+            conn.close()
+
+            return jsonify({
+                "success": False,
+                "error": "user creation aborted by admin"
+            }), 400
 
         userquery = """
             INSERT INTO Users (username, email, password, phone_number, usertype)
