@@ -342,13 +342,18 @@ def add_community():
             "error": str(e)
         }), 500
 
-@app.route("/data")
-def get_data():
+@app.route("/items", methods=["GET"])
+def get_items():
     try:
         conn = get_connection()
         cursor = conn.cursor()
 
-        cursor.execute('SELECT id, name, email FROM test_users ORDER BY id;')
+        cursor.execute(
+            """
+            SELECT itemid, category, status, image, location, date
+            FROM itemlist order by date desc;
+            """
+        )
 
         rows = cursor.fetchall()
 
@@ -357,15 +362,19 @@ def get_data():
 
         return jsonify([
             {
-                "id": row[0],
-                "name": row[1],
-                "email": row[2]
+                "itemID": row[0],
+                "category": row[1],
+                "status": row[2],
+                "image": row[3],
+                "location": row[4],
+                "date": row[5].isoformat()
             }
             for row in rows
         ])
 
     except Exception as e:
         return jsonify({
+            "success": False,
             "error": str(e)
         }), 500
 

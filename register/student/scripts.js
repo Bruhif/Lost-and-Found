@@ -20,7 +20,7 @@ document.getElementById("registerForm").addEventListener("submit", function(even
     })
     .then(response => response.json())
     .then(data => {
-        alert(data.message);
+        alert("Registration successful! You can now log in.");
     })
     .catch(error => {
         console.error("Error:", error);
