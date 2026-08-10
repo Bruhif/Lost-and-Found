@@ -27,6 +27,6 @@ document.getElementById("registerForm").addEventListener("submit", function(even
     });
     document.getElementById("registerForm").addEventListener("submit", function(event) {
     event.preventDefault();
-    window.location.href = "https://legion-is-here.tail208289.ts.net/login/";
+    window.location.href = "../../login/";
     })
 });
