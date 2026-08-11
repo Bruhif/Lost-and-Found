@@ -1,8 +1,16 @@
-import email
+import smtplib 
+from email.message import EmailMessage
+import os
+
+import secrets
+from datetime import datetime, timedelta
+from unittest import result
 
 from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 import psycopg2
+
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 CORS(app)
@@ -33,6 +41,188 @@ def test():
         "message": "Flask backend is working!"
     })
 
+@app.route("/debug/routes", methods=["GET"])
+def debug_routes():
+    return jsonify(sorted([str(rule) for rule in app.url_map.iter_rules()]))
+
+@app.route("/send-email", methods=["POST"])
+def send_email():
+    data = request.get_json()
+
+    email = data.get("email")
+
+    if not email:
+        return jsonify({
+            "success": False,
+            "error": "Email is required"
+        })
+
+    code = str(secrets.randbelow(1000000)).zfill(6)
+    expires_at = datetime.now() + timedelta(minutes=10)
+
+    EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
+    EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
+
+    if not EMAIL_ADDRESS or not EMAIL_PASSWORD:
+        return jsonify({
+            "success": False,
+            "error": "Email credentials are not set in environment variables"
+        })
+
+    msg = EmailMessage()
+
+    msg["Subject"] = "LnF - Email Verification"
+    msg["From"] = EMAIL_ADDRESS
+    msg["To"] = email
+
+    msg.set_content(
+        f"""
+        Your verification code is: {code}
+        """
+    )
+
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            DELETE FROM emailverification
+            WHERE expiresat < NOW() 
+            OR (verified = TRUE AND createdat < NOW() - INTERVAL '1 hour');
+        """)
+
+        conn.commit()
+
+        query = """
+            INSERT INTO emailverification (email, code, createdat, expiresat, verified)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING verificationid;
+        """
+
+        values = (
+            email,
+            code,
+            datetime.now(),
+            expires_at,
+            False
+        )
+        
+        cursor.execute(query, values)
+
+        verification_id = cursor.fetchone()[0]
+
+        conn.commit()
+
+        cursor.close()
+
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+            smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+            smtp.send_message(msg)
+
+        return jsonify({
+            "success": True,
+            "message": "Verification email sent successfully"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route("/verify-email", methods=["POST"])
+def verify_email():
+
+    data = request.get_json()
+
+    email = data.get("email")
+    code = data.get("code")
+
+    if not email or not code:
+        return jsonify({
+            "success": False,
+            "error": "Email and code are required"
+        }), 400
+
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        query = """
+            SELECT verificationid, code, expiresat, verified
+            FROM emailverification
+            WHERE email = %s
+            ORDER BY verificationid DESC
+            LIMIT 1;
+        """
+
+        cursor.execute(query, (email,))
+        verification = cursor.fetchone()
+
+        if not verification:
+            cursor.close()
+            conn.close()
+
+            return jsonify({
+                "success": False,
+                "error": "No verification code found for this email"
+            }), 400
+
+        verification_id = verification[0]
+        stored_code = verification[1]
+        expires_at = verification[2]
+        verified = verification[3]
+
+        if verified:
+            cursor.close()
+            conn.close()
+
+            return jsonify({
+                "success": False,
+                "error": "Email has already been verified"
+            }), 400
+
+        if datetime.now() > expires_at:
+            cursor.close()
+            conn.close()
+
+            return jsonify({
+                "success": False,
+                "error": "Verification code has expired"
+            }), 400
+
+        if code != stored_code:
+            cursor.close()
+            conn.close()
+
+            return jsonify({
+                "success": False,
+                "error": "Invalid verification code"
+            }), 400
+
+        update_query = """
+            UPDATE emailverification
+            SET verified = TRUE
+            WHERE verificationid = %s;
+        """
+
+        cursor.execute(update_query, (verification_id,))
+
+        conn.commit()
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "success": True,
+            "message": "Email verified successfully"
+        })
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
 @app.route("/login", methods=["POST"])
 def login():
     data = request.get_json()
@@ -41,34 +231,40 @@ def login():
     password = data.get("password")
 
     if not username or not password:
-        return jsonify({"error": "Username and password are required"}), 400
+        return jsonify({
+            "success": False, 
+            "error": "Username and password are required"
+        }), 400
 
     try:
         conn = get_connection()
         cursor = conn.cursor()
 
         query = """
-            SELECT userid, username, email, usertype
+            SELECT userid, username, email, usertype, password
             FROM Users
-            WHERE username = %s AND password = %s;
+            WHERE username = %s;
         """
 
-        cursor.execute(query, (username, password))
+        cursor.execute(query, (username,))
         user = cursor.fetchone()
 
         cursor.close()
         conn.close()
 
         if user:
-            return jsonify({
-                "success": True,
-                "user": {
-                    "id": user[0],
-                    "name": user[1],
-                    "email": user[2],
-                    "usertype": user[3]
-                }
-            })
+            if check_password_hash(user[4], password):
+                return jsonify({
+                    "success": True,
+                    "user": {
+                        "id": user[0],
+                        "name": user[1],
+                        "email": user[2],
+                        "usertype": user[3]
+                    }
+                })
+            else:
+                return jsonify({"success": False, "error": "Invalid credentials"}), 401
         else:
             return jsonify({"success": False, "error": "Invalid credentials"}), 401
 
@@ -84,6 +280,7 @@ def add_student():
 
     name = data.get("username")
     email = data.get("email")
+    hashed_password = generate_password_hash(data.get("password"))
     password = data.get("password")
     number = data.get("phone_number")
     usertype = data.get("usertype")
@@ -99,21 +296,33 @@ def add_student():
     print(year)
 
     if not name or not email or not password or not number or not department or not year:
-        return jsonify({"error": "All fields are required"}), 400
+        return jsonify({
+            "success": False,
+            "error": "All fields are required"
+        }), 400
 
     try:
         conn = get_connection()
         cursor = conn.cursor()
 
-        s2fa = input("insert data to student table? (y/n): ")
+        verify_query = """
+            SELECT verified
+            FROM emailverification
+            WHERE email = %s
+            ORDER BY verificationid DESC
+            LIMIT 1;
+        """
 
-        if s2fa.lower() != "y":
+        cursor.execute(verify_query, (email,))
+        verification = cursor.fetchone()
+
+        if not verification or not verification[0]:
             cursor.close()
             conn.close()
 
             return jsonify({
                 "success": False,
-                "error": "user creation aborted by admin"
+                "error": "Email is not verified"
             }), 400
 
         userquery = """
@@ -125,7 +334,7 @@ def add_student():
         values = (
             name,
             email,
-            password,
+            hashed_password,
             number,
             usertype
         )
@@ -174,6 +383,7 @@ def add_lecturer():
 
     name = data.get("username")
     email = data.get("email")
+    hashed_password = generate_password_hash(data.get("password"))
     password = data.get("password")
     number = data.get("phone_number")
     usertype = data.get("usertype")
@@ -187,21 +397,33 @@ def add_lecturer():
     print(department)
 
     if not name or not email or not password or not number or not department:
-        return jsonify({"error": "All fields are required"}), 400
+        return jsonify({
+            "success": False,
+            "error": "All fields are required"
+        }), 400
 
     try:
         conn = get_connection()
         cursor = conn.cursor()
 
-        l2fa = input("insert data to lecturer table? (y/n): ")
+        verify_query = """
+            SELECT verified
+            FROM emailverification
+            WHERE email = %s
+            ORDER BY verificationid DESC
+            LIMIT 1;
+        """
 
-        if l2fa.lower() != "y":
+        cursor.execute(verify_query, (email,))
+        verification = cursor.fetchone()
+
+        if not verification or not verification[0]:
             cursor.close()
             conn.close()
 
             return jsonify({
                 "success": False,
-                "error": "user creation aborted by admin"
+                "error": "Email is not verified"
             }), 400
 
         userquery = """
@@ -213,7 +435,7 @@ def add_lecturer():
         values = (
             name,
             email,
-            password,
+            hashed_password,
             number,
             usertype
         )
@@ -261,6 +483,7 @@ def add_community():
 
     name = data.get("username")
     email = data.get("email")
+    hashed_password = generate_password_hash(data.get("password"))
     password = data.get("password")
     number = data.get("phone_number")
     usertype = data.get("usertype")
@@ -274,21 +497,33 @@ def add_community():
     print(role)
 
     if not name or not email or not password or not number or not role:
-        return jsonify({"error": "All fields are required"}), 400
+        return jsonify({
+            "success": False, 
+            "error": "All fields are required"
+        }), 400
 
     try:
         conn = get_connection()
         cursor = conn.cursor()
 
-        c2fa = input("insert data to community table? (y/n): ")
+        verify_query = """
+            SELECT verified
+            FROM emailverification
+            WHERE email = %s    
+            ORDER BY verificationid DESC
+            LIMIT 1;
+        """
 
-        if c2fa.lower() != "y":
+        cursor.execute(verify_query, (email,))
+        verification = cursor.fetchone()
+
+        if not verification or not verification[0]:
             cursor.close()
             conn.close()
 
             return jsonify({
                 "success": False,
-                "error": "user creation aborted by admin"
+                "error": "Email is not verified"
             }), 400
 
         userquery = """
@@ -300,7 +535,7 @@ def add_community():
         values = (
             name,
             email,
-            password,
+            hashed_password,
             number,
             usertype
         )
@@ -378,9 +613,86 @@ def get_items():
             "error": str(e)
         }), 500
 
+@app.route("/debug/schema", methods=["GET"])
+def debug_schema():
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT column_name, data_type
+            FROM information_schema.columns
+            WHERE table_name = 'itemlist';
+        """)
+
+        columns = cursor.fetchall()
+        cursor.close()
+        conn.close()
+
+        return jsonify([{"column": c[0], "type": c[1]} for c in columns])
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+@app.route("/add/lost", methods=["POST"])
+def add_lost():
+    data = request.get_json()
+
+    category = data.get("category")
+    status = data.get("status")
+    date = data.get("date")
+    reportedbyuserid = data.get("reportedbyuserid")
+
+    print(category)
+    print(status)
+    print(date)
+    print(reportedbyuserid)
+
+    if not category or not status or not date or not reportedbyuserid:
+        return jsonify({"error": "All fields are required"}), 400
+
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        query = """
+            INSERT INTO itemlist (category, status, date, reportedbyuserid)
+            VALUES (%s, %s, %s, %s)
+            RETURNING itemid;
+        """
+
+        values = (
+            category,
+            status,
+            date,
+            reportedbyuserid
+        )
+
+        cursor.execute(query, values)
+
+        item_id = cursor.fetchone()[0]
+        conn.commit()
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "success": True,
+            "message": "Lost item reported successfully.",
+            "itemID": item_id
+        })
+
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
 if __name__ == "__main__":
     app.run(
         host="0.0.0.0",
         port=5000,
-        debug=True
+        debug=True,
+        use_reloader=False
     )

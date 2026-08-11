@@ -2,23 +2,41 @@
 
 <h2>Community Registration Form</h2>
 
-<form id="registerForm">
-    <input type="text" id="name" placeholder="Username">
-    <br><br>
-    <input type="email" id="email" placeholder="Email">
-    <br><br>
-    <input type="password" id="password" placeholder="Password">
-    <br><br>
-    <input type="text" id="phone" placeholder="Phone Number">
-    <br><br>
-    <select name="role" id="role">
-        <option value="">Select Role</option>
-        <option value="volunteer">Volunteer</option>
-        <option value="organizer">Organizer</option>
-        <option value="member">Member</option>
-    </select>
-    <br><br>
-    <button type="submit">Submit</button>
-</form>
-<script src="scripts.js"></script>
+    <form id="registerForm">
+        <input type="text" id="name" placeholder="Username">
+        <br><br>
+        <input type="email" id="email" placeholder="Email">
+        <br><br>
+        <input type="password" id="password" placeholder="Password">
+        <br><br>
+        <input type="text" id="phone" placeholder="Phone Number">
+        <br><br>
+        <select name="role" id="role">
+            <option value="">Select Role</option>
+            <option value="volunteer">Volunteer</option>
+            <option value="organizer">Organizer</option>
+            <option value="member">Member</option>
+        </select>
+        <br><br>
+        <button type="submit">Submit</button>
+    </form>
+
+    <div id="verificationSection" style="display: none;">
+        <h3>Verify your email</h3>
+        <p>Enter the 6 digit verification code sent to your email.</p>
+
+        <input 
+            type="text" 
+            id="verificationCode" 
+            placeholder="Enter verification code"
+            maxlength="6"
+            required>
+        <br><br>
+        <button type="button" onclick="verifyEmail()">
+            Verify Email
+        </button>
+    </div>
+
+    <script src="scripts.js"></script>
+
 </body>
