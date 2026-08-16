@@ -44,11 +44,6 @@ function validateNotFutureDate(dateValue, errorElementId) {
 }
 
 // ---------- REPORT LOST ITEM (with optional image) ----------
-// NOTE: /add/lost is being changed from JSON to multipart/form-data here,
-// so it can accept an image the same way /add/found does. This means the
-// backend route needs updating too — see the replacement route below,
-// which needs to REPLACE (not just add to) the existing /add/lost route
-// in your teammate's file.
 document.getElementById("lostForm").addEventListener("submit", function (event) {
     event.preventDefault();
 
@@ -79,12 +74,11 @@ document.getElementById("lostForm").addEventListener("submit", function (event) 
     })
     .catch(function (error) {
         console.error("Error reporting lost item:", error);
+        alert("Couldn't reach the server. Please check your connection and try again.");
     });
 });
 
 // ---------- REPORT FOUND ITEM (with image upload) ----------
-// NOTE: posts to /add/found — does not exist on the backend yet.
-// See backend_additions.py for the route to send your teammate.
 document.getElementById("foundForm").addEventListener("submit", function (event) {
     event.preventDefault();
 
@@ -114,6 +108,7 @@ document.getElementById("foundForm").addEventListener("submit", function (event)
     })
     .catch(function (error) {
         console.error("Error reporting found item:", error);
+        alert("Couldn't reach the server. Please check your connection and try again.");
     });
 });
 
@@ -127,6 +122,7 @@ function loadItems() {
         })
         .catch(function (error) {
             console.error("Error loading items:", error);
+            alert("Couldn't reach the server. Please check your connection and try again.");
         });
 }
 
@@ -239,8 +235,6 @@ document.getElementById("closeDetailBtn").addEventListener("click", function () 
     document.getElementById("detailModal").classList.add("hidden");
 });
 
-// NOTE: DELETE /items/{id} does not exist on the backend yet.
-// See backend_additions.py for the route to send your teammate.
 function deleteItem(itemID) {
     if (!confirm("Are you sure you want to delete this report? This cannot be undone.")) return;
 
@@ -257,12 +251,11 @@ function deleteItem(itemID) {
     })
     .catch(function (error) {
         console.error("Error deleting item:", error);
+        alert("Couldn't reach the server. Please check your connection and try again.");
     });
 }
 
 // ---------- CLAIM SUBMISSION ----------
-// NOTE: /claims (POST) and /claims/user/{id} (GET) do not exist on the
-// backend yet. See backend_additions.py for the routes to send your teammate.
 function openClaimModal(itemID) {
     document.getElementById("claimItemID").value = itemID;
     document.getElementById("claimNotes").value = "";
@@ -281,7 +274,6 @@ document.getElementById("submitClaimBtn").addEventListener("click", function () 
     const claimData = {
         itemid: document.getElementById("claimItemID").value,
         claimuserid: currentUserID,
-        verificationnotes: document.getElementById("claimNotes").value,
         claimdate: new Date().toISOString().split("T")[0],
         claimstatus: "Pending"
     };
@@ -299,6 +291,7 @@ document.getElementById("submitClaimBtn").addEventListener("click", function () 
     })
     .catch(function (error) {
         console.error("Error submitting claim:", error);
+        alert("Couldn't reach the server, so your claim was NOT submitted. Please check your connection and try again.");
     });
 });
 
@@ -309,6 +302,7 @@ function loadMyClaims() {
         .then(function (claims) { renderClaims(claims); })
         .catch(function (error) {
             console.error("Error loading claims:", error);
+            alert("Couldn't reach the server. Please check your connection and try again.");
         });
 }
 
@@ -328,7 +322,6 @@ function renderClaims(claims) {
             <span class="status-badge">${claim.claimstatus}</span>
             <h4>Item #${claim.itemid}</h4>
             <p>Claimed on: ${claim.claimdate}</p>
-            <p>${claim.verificationnotes || ''}</p>
         `;
         container.appendChild(card);
     });

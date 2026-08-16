@@ -768,7 +768,6 @@ def add_claim():
 
     itemid = data.get("itemid")
     claimuserid = data.get("claimuserid")
-    verificationnotes = data.get("verificationnotes")
     claimdate = data.get("claimdate")
     claimstatus = data.get("claimstatus", "Pending")
 
@@ -780,18 +779,12 @@ def add_claim():
         cursor = conn.cursor()
 
         query = """
-            INSERT INTO claims (itemid, claimuserid, verificationnotes, claimdate, claimstatus)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO claims (itemid, claimuserid, claimdate, claimstatus)
+            VALUES (%s, %s, %s, %s)
             RETURNING claimid;
         """
-        values = (itemid, claimuserid, verificationnotes, claimdate, claimstatus)
-        cursor.execute(query, values)
-
+        cursor.execute(query, (itemid, claimuserid, claimdate, claimstatus))
         claim_id = cursor.fetchone()[0]
-        cursor.execute(
-            "UPDATE itemlist SET status = %s WHERE itemid = %s;",
-            ("Pending Claim", itemid)
-        )
 
         conn.commit()
         cursor.close()
@@ -814,7 +807,7 @@ def get_user_claims(user_id):
 
         cursor.execute(
             """
-            SELECT claimid, itemid, claimuserid, verificationnotes, claimdate, claimstatus
+            SELECT claimid, itemid, claimuserid, claimdate, claimstatus
             FROM claims
             WHERE claimuserid = %s
             ORDER BY claimdate DESC;
@@ -827,14 +820,10 @@ def get_user_claims(user_id):
 
         return jsonify([
             {
-                "claimid": row[0],
-                "itemid": row[1],
-                "claimuserid": row[2],
-                "verificationnotes": row[3],
-                "claimdate": row[4].isoformat() if row[4] else None,
-                "claimstatus": row[5]
+                "claimid": r[0], "itemid": r[1], "claimuserid": r[2],
+                "claimdate": r[3].isoformat() if r[3] else None, "claimstatus": r[4]
             }
-            for row in rows
+            for r in rows
         ])
 
     except Exception as e:
@@ -848,7 +837,7 @@ def get_pending_claims():
 
         cursor.execute(
             """
-            SELECT claimid, itemid, claimuserid, verificationnotes, claimdate, claimstatus
+            SELECT claimid, itemid, claimuserid, claimdate, claimstatus
             FROM claims
             WHERE claimstatus = 'Pending'
             ORDER BY claimdate ASC;
@@ -860,14 +849,10 @@ def get_pending_claims():
 
         return jsonify([
             {
-                "claimid": row[0],
-                "itemid": row[1],
-                "claimuserid": row[2],
-                "verificationnotes": row[3],
-                "claimdate": row[4].isoformat() if row[4] else None,
-                "claimstatus": row[5]
+                "claimid": r[0], "itemid": r[1], "claimuserid": r[2],
+                "claimdate": r[3].isoformat() if r[3] else None, "claimstatus": r[4]
             }
-            for row in rows
+            for r in rows
         ])
 
     except Exception as e:
@@ -929,11 +914,11 @@ def _review_claim(claim_id, new_status):
             (new_status, verifiedby, claim_id)
         )
 
-        item_status = "Claimed" if new_status == "Approved" else "Found"
-        cursor.execute(
-            "UPDATE itemlist SET status = %s WHERE itemid = %s;",
-            (item_status, itemid)
-        )
+        # itemlist.status only allows 'Lost'/'Found' — only touch it on rejection,
+        # to put the item back to Found. On approval, leave itemlist.status alone;
+        # claim state (Pending/Approved/Rejected) already lives in claims.claimstatus.
+        if new_status == "Rejected":
+            cursor.execute("UPDATE itemlist SET status = %s WHERE itemid = %s;", ("Found", itemid))
 
         conn.commit()
         cursor.close()
@@ -953,6 +938,45 @@ def approve_claim(claim_id):
 @app.route("/claims/<int:claim_id>/reject", methods=["POST"])
 def reject_claim(claim_id):
     return _review_claim(claim_id, "Rejected")
+
+@app.route("/admin/login", methods=["POST"])
+def admin_login():
+    data = request.get_json()
+
+    email = data.get("email")
+    password = data.get("password")
+
+    if not email or not password:
+        return jsonify({"success": False, "error": "Email and password are required"}), 400
+
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute(
+            "SELECT adminid, adminname, adminemail, password FROM admin WHERE adminemail = %s;",
+            (email,)
+        )
+        admin = cursor.fetchone()
+
+        cursor.close()
+        conn.close()
+
+        if admin and check_password_hash(admin[3], password):
+            return jsonify({
+                "success": True,
+                "admin": {
+                    "id": admin[0],
+                    "name": admin[1],
+                    "email": admin[2]
+                }
+            })
+        else:
+            return jsonify({"success": False, "error": "Invalid credentials"}), 401
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
 
 if __name__ == "__main__":
     app.run(

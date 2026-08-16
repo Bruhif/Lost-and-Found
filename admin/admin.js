@@ -1,7 +1,12 @@
 console.log("admin.js loaded");
 
 const API_BASE = "https://legion-is-here.tail208289.ts.net";
-const currentAdminID = localStorage.getItem("userID"); // assumes an admin also logs in and their ID is saved the same way
+const currentAdminID = localStorage.getItem("adminID");
+
+if (!currentAdminID) {
+    alert("Please log in as an admin.");
+    window.location.href = "../login/admin_login.html"; // adjust path to match your project structure
+}
 
 // ---------- TAB SWITCHING ----------
 const buttons = document.querySelectorAll(".tab-btn");
@@ -21,14 +26,13 @@ buttons.forEach(function (btn) {
 });
 
 // ---------- PENDING CLAIMS ----------
-// NOTE: GET /claims/pending does not exist on the backend yet.
-// See backend_additions.py for the route to send your teammate.
 function loadPendingClaims() {
     fetch(`${API_BASE}/claims/pending`)
         .then(function (response) { return response.json(); })
         .then(function (claims) { renderClaimQueue(claims); })
         .catch(function (error) {
             console.error("Error loading pending claims:", error);
+            alert("Couldn't reach the server. Please check your connection and try again.");
         });
 }
 
@@ -49,7 +53,6 @@ function renderClaimQueue(claims) {
             <h4>Item #${claim.itemid}</h4>
             <p>Claimed by user #${claim.claimuserid}</p>
             <p>Date: ${claim.claimdate}</p>
-            <p>${claim.verificationnotes || 'No notes provided'}</p>
         `;
 
         const actions = document.createElement("div");
@@ -78,8 +81,7 @@ function renderClaimQueue(claims) {
     });
 }
 
-// NOTE: POST /claims/{id}/approve and /claims/{id}/reject do not exist yet.
-// See backend_additions.py — these also trigger the notification email.
+// These also trigger the claim notification email server-side.
 function reviewClaim(claimID, action) {
     const label = action === "approve" ? "approve" : "reject";
     if (!confirm(`Are you sure you want to ${label} this claim?`)) return;
@@ -96,6 +98,7 @@ function reviewClaim(claimID, action) {
     })
     .catch(function (error) {
         console.error(`Error ${label}ing claim:`, error);
+        alert("Couldn't reach the server. Please check your connection and try again.");
     });
 }
 
@@ -106,6 +109,7 @@ function loadAllItems() {
         .then(function (items) { renderAllItems(items); })
         .catch(function (error) {
             console.error("Error loading items:", error);
+            alert("Couldn't reach the server. Please check your connection and try again.");
         });
 }
 
