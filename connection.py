@@ -5,8 +5,11 @@ import os
 import secrets
 from datetime import datetime, timedelta
 from unittest import result
+from functools import wraps
 
-from flask import Flask, render_template, request, jsonify, send_from_directory
+import jwt
+
+from flask import Flask, render_template, request, jsonify, send_from_directory, g
 from flask_cors import CORS
 import psycopg2
 
@@ -23,6 +26,86 @@ DB_CONFIG = {
     "user": "teentin",
     "password": "1712"
 }
+
+# Secret used to sign session tokens. Preferred: set the JWT_SECRET
+# environment variable (e.g. in your TrueNAS app's env config) — never
+# commit a real secret to source control.
+#
+# Fallback: if JWT_SECRET isn't set, generate one and persist it to a local
+# file so restarts don't invalidate every logged-in session. This file
+# should NOT be committed to git or shared — add it to .gitignore.
+_SECRET_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".jwt_secret")
+
+
+def _load_or_create_secret():
+    env_secret = os.getenv("JWT_SECRET")
+    if env_secret:
+        return env_secret
+
+    if os.path.exists(_SECRET_FILE):
+        with open(_SECRET_FILE, "r") as f:
+            return f.read().strip()
+
+    new_secret = secrets.token_hex(32)
+    with open(_SECRET_FILE, "w") as f:
+        f.write(new_secret)
+    os.chmod(_SECRET_FILE, 0o600)  # readable/writable by the owner only
+    return new_secret
+
+
+JWT_SECRET = _load_or_create_secret()
+JWT_ALGORITHM = "HS256"
+TOKEN_EXPIRY_HOURS = 24
+
+
+def generate_token(payload):
+    to_encode = dict(payload)
+    to_encode["exp"] = datetime.utcnow() + timedelta(hours=TOKEN_EXPIRY_HOURS)
+    return jwt.encode(to_encode, JWT_SECRET, algorithm=JWT_ALGORITHM)
+
+
+def require_auth(role=None):
+    """
+    Decorator for routes that need a logged-in user or admin.
+    Reads 'Authorization: Bearer <token>', verifies it, and stashes the
+    decoded claims on flask.g so the route can use g.user_id / g.usertype
+    (or g.admin_id for admin tokens) instead of trusting anything the
+    client sent in the request body/query string.
+
+    role=None    -> any valid token (user or admin) is accepted
+    role="admin" -> only a token issued by /admin/login is accepted
+    role="user"  -> only a token issued by /login is accepted
+    """
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            auth_header = request.headers.get("Authorization", "")
+
+            if not auth_header.startswith("Bearer "):
+                return jsonify({"success": False, "error": "Missing or invalid Authorization header"}), 401
+
+            token = auth_header[len("Bearer "):]
+
+            try:
+                claims = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+            except jwt.ExpiredSignatureError:
+                return jsonify({"success": False, "error": "Session expired, please log in again"}), 401
+            except jwt.InvalidTokenError:
+                return jsonify({"success": False, "error": "Invalid session token"}), 401
+
+            token_role = claims.get("role")
+
+            if role and token_role != role:
+                return jsonify({"success": False, "error": "Not authorized for this action"}), 403
+
+            g.claims = claims
+            g.user_id = claims.get("user_id")
+            g.usertype = claims.get("usertype")
+            g.admin_id = claims.get("admin_id")
+
+            return fn(*args, **kwargs)
+        return wrapper
+    return decorator
 
 
 def get_connection():
@@ -256,8 +339,14 @@ def login():
 
         if user:
             if check_password_hash(user[4], password):
+                token = generate_token({
+                    "user_id": user[0],
+                    "usertype": user[3],
+                    "role": "user"
+                })
                 return jsonify({
                     "success": True,
+                    "token": token,
                     "user": {
                         "id": user[0],
                         "name": user[1],
@@ -620,13 +709,14 @@ UPLOAD_FOLDER = "uploads"  # make sure this folder exists next to your Flask fil
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 @app.route("/add/lost", methods=["POST"])
+@require_auth(role="user")
 def add_lost():
     category = request.form.get("category")
     status = request.form.get("status", "Lost")
     date = request.form.get("date")
-    reportedbyuserid = request.form.get("reportedbyuserid")
+    reportedbyuserid = g.user_id  # from the verified token, not the form body
 
-    if not category or not status or not date or not reportedbyuserid:
+    if not category or not status or not date:
         return jsonify({"success": False, "error": "All fields are required"}), 400
 
     image_path = None
@@ -664,14 +754,15 @@ def add_lost():
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/add/found", methods=["POST"])
+@require_auth(role="user")
 def add_found():
     category = request.form.get("category")
     location = request.form.get("location")
     date = request.form.get("date")
     status = request.form.get("status", "Found")
-    reportedbyuserid = request.form.get("reportedbyuserid")
+    reportedbyuserid = g.user_id  # from the verified token, not the form body
 
-    if not category or not location or not date or not reportedbyuserid:
+    if not category or not location or not date:
         return jsonify({"success": False, "error": "All fields are required"}), 400
 
     image_path = None
@@ -714,19 +805,13 @@ def serve_upload(filename):
     return send_from_directory(UPLOAD_FOLDER, filename)
 
 # ---------- Delete an item report ----------
-# SECURITY NOTE: this checks that the userID sent in the request body
-# matches the item's reportedbyuserid — but since userID just comes from
-# the frontend's localStorage (not a verified login session/token), a
-# person could technically edit their browser's localStorage to claim a
-# different userID and bypass this check. This is "casual misuse"
-# protection, not real security.
+# Now requires a valid session token — the acting user comes from the
+# verified token (g.user_id), not from anything the client sends in the
+# request body, so it can no longer be spoofed via localStorage.
 @app.route("/items/<int:item_id>", methods=["DELETE"])
+@require_auth(role="user")
 def delete_item(item_id):
-    data = request.get_json() or {}
-    requesting_user_id = data.get("userid")
-
-    if not requesting_user_id:
-        return jsonify({"success": False, "error": "userid is required to delete an item"}), 400
+    requesting_user_id = g.user_id
 
     try:
         conn = get_connection()
@@ -763,15 +848,16 @@ def delete_item(item_id):
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/claims", methods=["POST"])
+@require_auth(role="user")
 def add_claim():
     data = request.get_json()
 
     itemid = data.get("itemid")
-    claimuserid = data.get("claimuserid")
+    claimuserid = g.user_id  # from the verified token, not the request body
     claimdate = data.get("claimdate")
     claimstatus = data.get("claimstatus", "Pending")
 
-    if not itemid or not claimuserid or not claimdate:
+    if not itemid or not claimdate:
         return jsonify({"success": False, "error": "Required fields missing"}), 400
 
     try:
@@ -799,8 +885,9 @@ def add_claim():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-@app.route("/claims/user/<int:user_id>", methods=["GET"])
-def get_user_claims(user_id):
+@app.route("/claims/me", methods=["GET"])
+@require_auth(role="user")
+def get_user_claims():
     try:
         conn = get_connection()
         cursor = conn.cursor()
@@ -812,7 +899,7 @@ def get_user_claims(user_id):
             WHERE claimuserid = %s
             ORDER BY claimdate DESC;
             """,
-            (user_id,)
+            (g.user_id,)
         )
         rows = cursor.fetchall()
         cursor.close()
@@ -830,6 +917,7 @@ def get_user_claims(user_id):
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/claims/pending", methods=["GET"])
+@require_auth(role="admin")
 def get_pending_claims():
     try:
         conn = get_connection()
@@ -883,8 +971,7 @@ def send_claim_notification(to_email, approved, category):
         pass
 
 def _review_claim(claim_id, new_status):
-    data = request.get_json() or {}
-    verifiedby = data.get("verifiedby")
+    verifiedby = g.admin_id  # from the verified admin token, not the request body
 
     try:
         conn = get_connection()
@@ -932,10 +1019,12 @@ def _review_claim(claim_id, new_status):
         return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route("/claims/<int:claim_id>/approve", methods=["POST"])
+@require_auth(role="admin")
 def approve_claim(claim_id):
     return _review_claim(claim_id, "Approved")
 
 @app.route("/claims/<int:claim_id>/reject", methods=["POST"])
+@require_auth(role="admin")
 def reject_claim(claim_id):
     return _review_claim(claim_id, "Rejected")
 
@@ -963,8 +1052,13 @@ def admin_login():
         conn.close()
 
         if admin and check_password_hash(admin[3], password):
+            token = generate_token({
+                "admin_id": admin[0],
+                "role": "admin"
+            })
             return jsonify({
                 "success": True,
+                "token": token,
                 "admin": {
                     "id": admin[0],
                     "name": admin[1],
@@ -982,6 +1076,6 @@ if __name__ == "__main__":
     app.run(
         host="0.0.0.0",
         port=5000,
-        debug=True,
+        debug=False,
         use_reloader=False
     )

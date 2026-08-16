@@ -17,6 +17,7 @@ document.getElementById("loginForm").addEventListener("submit", function(event) 
         if (data.success) {
             localStorage.setItem("userID", data.user.id);
             localStorage.setItem("usertype", data.user.usertype);
+            localStorage.setItem("token", data.token);
             alert("Login successful!");
             window.location.href = "../dashboard/";
         } else {

@@ -2,6 +2,16 @@ console.log("dashboard.js loaded");
 
 const API_BASE = "https://legion-is-here.tail208289.ts.net";
 const currentUserID = localStorage.getItem("userID");
+const authToken = localStorage.getItem("token");
+
+if (!currentUserID || !authToken) {
+    alert("Please log in.");
+    window.location.href = "../login/"; // adjust path to match your project structure
+}
+
+function authHeaders(extra) {
+    return Object.assign({ "Authorization": `Bearer ${authToken}` }, extra || {});
+}
 
 let allItems = []; // cache of the last /items fetch, used for count/sort/detail lookups
 
@@ -58,14 +68,14 @@ document.getElementById("lostForm").addEventListener("submit", function (event) 
     formData.append("category", itemCategory);
     formData.append("status", "Lost");
     formData.append("date", lostDate);
-    formData.append("reportedbyuserid", currentUserID);
 
     const imageFile = document.getElementById("lostImage").files[0];
     if (imageFile) formData.append("image", imageFile);
 
     fetch(`${API_BASE}/add/lost`, {
         method: "POST",
-        body: formData // no Content-Type header — browser sets multipart boundary automatically
+        headers: authHeaders(), // no Content-Type here — browser sets multipart boundary automatically
+        body: formData
     })
     .then(function (response) { return response.json(); })
     .then(function (data) {
@@ -92,13 +102,13 @@ document.getElementById("foundForm").addEventListener("submit", function (event)
     formData.append("location", document.getElementById("foundLocation").value);
     formData.append("date", foundDate);
     formData.append("status", "Found");
-    formData.append("reportedbyuserid", currentUserID);
 
     const imageFile = document.getElementById("foundImage").files[0];
     if (imageFile) formData.append("image", imageFile);
 
     fetch(`${API_BASE}/add/found`, {
         method: "POST",
+        headers: authHeaders(),
         body: formData
     })
     .then(function (response) { return response.json(); })
@@ -240,8 +250,7 @@ function deleteItem(itemID) {
 
     fetch(`${API_BASE}/items/${itemID}`, {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userid: currentUserID })
+        headers: authHeaders()
     })
     .then(function (response) { return response.json(); })
     .then(function (data) {
@@ -273,14 +282,13 @@ document.getElementById("submitClaimBtn").addEventListener("click", function () 
 
     const claimData = {
         itemid: document.getElementById("claimItemID").value,
-        claimuserid: currentUserID,
         claimdate: new Date().toISOString().split("T")[0],
         claimstatus: "Pending"
     };
 
     fetch(`${API_BASE}/claims`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify(claimData)
     })
     .then(function (response) { return response.json(); })
@@ -297,7 +305,7 @@ document.getElementById("submitClaimBtn").addEventListener("click", function () 
 
 // ---------- MY CLAIMS ----------
 function loadMyClaims() {
-    fetch(`${API_BASE}/claims/user/${currentUserID}`)
+    fetch(`${API_BASE}/claims/me`, { headers: authHeaders() })
         .then(function (response) { return response.json(); })
         .then(function (claims) { renderClaims(claims); })
         .catch(function (error) {

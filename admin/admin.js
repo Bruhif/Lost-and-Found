@@ -2,10 +2,15 @@ console.log("admin.js loaded");
 
 const API_BASE = "https://legion-is-here.tail208289.ts.net";
 const currentAdminID = localStorage.getItem("adminID");
+const authToken = localStorage.getItem("adminToken");
 
-if (!currentAdminID) {
+if (!currentAdminID || !authToken) {
     alert("Please log in as an admin.");
     window.location.href = "../login/admin_login.html"; // adjust path to match your project structure
+}
+
+function authHeaders(extra) {
+    return Object.assign({ "Authorization": `Bearer ${authToken}` }, extra || {});
 }
 
 // ---------- TAB SWITCHING ----------
@@ -27,7 +32,7 @@ buttons.forEach(function (btn) {
 
 // ---------- PENDING CLAIMS ----------
 function loadPendingClaims() {
-    fetch(`${API_BASE}/claims/pending`)
+    fetch(`${API_BASE}/claims/pending`, { headers: authHeaders() })
         .then(function (response) { return response.json(); })
         .then(function (claims) { renderClaimQueue(claims); })
         .catch(function (error) {
@@ -88,8 +93,7 @@ function reviewClaim(claimID, action) {
 
     fetch(`${API_BASE}/claims/${claimID}/${action}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ verifiedby: currentAdminID })
+        headers: authHeaders()
     })
     .then(function (response) { return response.json(); })
     .then(function (data) {
