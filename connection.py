@@ -1,4 +1,4 @@
-import smtplib 
+import smtplib
 from email.message import EmailMessage
 import os
 
@@ -6,15 +6,12 @@ import secrets
 from datetime import datetime, timedelta
 from unittest import result
 
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_from_directory
 from flask_cors import CORS
 import psycopg2
 
 from werkzeug.security import generate_password_hash, check_password_hash
-
-# For backend
 from werkzeug.utils import secure_filename
-
 
 app = Flask(__name__)
 CORS(app)
@@ -44,6 +41,10 @@ def test():
         "success": True,
         "message": "Flask backend is working!"
     })
+
+@app.route("/debug/routes", methods=["GET"])
+def debug_routes():
+    return jsonify(sorted([str(rule) for rule in app.url_map.iter_rules()]))
 
 @app.route("/send-email", methods=["POST"])
 def send_email():
@@ -85,8 +86,17 @@ def send_email():
         conn = get_connection()
         cursor = conn.cursor()
 
+        # Clear out old/expired verification rows before inserting a new one
+        cursor.execute("""
+            DELETE FROM emailverification
+            WHERE expiresat < NOW()
+            OR (verified = TRUE AND createdat < NOW() - INTERVAL '1 hour');
+        """)
+
+        conn.commit()
+
         query = """
-            INSERT INTO emailverification (email, code, createdat, expireat, verified)
+            INSERT INTO emailverification (email, code, createdat, expiresat, verified)
             VALUES (%s, %s, %s, %s, %s)
             RETURNING verificationid;
         """
@@ -98,7 +108,7 @@ def send_email():
             expires_at,
             False
         )
-        
+
         cursor.execute(query, values)
 
         verification_id = cursor.fetchone()[0]
@@ -113,10 +123,7 @@ def send_email():
 
         return jsonify({
             "success": True,
-            "message": "Verification email sent successfully",
-            "code": code,
-            "expires_at": expires_at.isoformat(),
-            "verification_id": verification_id
+            "message": "Verification email sent successfully"
         })
     except Exception as e:
         return jsonify({
@@ -143,7 +150,7 @@ def verify_email():
         cursor = conn.cursor()
 
         query = """
-            SELECT verificationid, code, expireat, verified
+            SELECT verificationid, code, expiresat, verified
             FROM emailverification
             WHERE email = %s
             ORDER BY verificationid DESC
@@ -164,7 +171,7 @@ def verify_email():
 
         verification_id = verification[0]
         stored_code = verification[1]
-        expireat = verification[2]
+        expires_at = verification[2]
         verified = verification[3]
 
         if verified:
@@ -176,7 +183,7 @@ def verify_email():
                 "error": "Email has already been verified"
             }), 400
 
-        if datetime.now() > expireat:
+        if datetime.now() > expires_at:
             cursor.close()
             conn.close()
 
@@ -227,7 +234,7 @@ def login():
 
     if not username or not password:
         return jsonify({
-            "success": False, 
+            "success": False,
             "error": "Username and password are required"
         }), 400
 
@@ -281,14 +288,6 @@ def add_student():
     usertype = data.get("usertype")
     department = data.get("department")
     year = data.get("year")
-
-    print(name)
-    print(email)
-    print(password)
-    print(number)
-    print(usertype)
-    print(department)
-    print(year)
 
     if not name or not email or not password or not number or not department or not year:
         return jsonify({
@@ -384,13 +383,6 @@ def add_lecturer():
     usertype = data.get("usertype")
     department = data.get("department")
 
-    print(name)
-    print(email)
-    print(password)
-    print(number)
-    print(usertype)
-    print(department)
-
     if not name or not email or not password or not number or not department:
         return jsonify({
             "success": False,
@@ -408,6 +400,7 @@ def add_lecturer():
             ORDER BY verificationid DESC
             LIMIT 1;
         """
+
         cursor.execute(verify_query, (email,))
         verification = cursor.fetchone()
 
@@ -481,18 +474,12 @@ def add_community():
     password = data.get("password")
     number = data.get("phone_number")
     usertype = data.get("usertype")
-    role = data.get("department")
-
-    print(name)
-    print(email)
-    print(password)
-    print(number)
-    print(usertype)
-    print(role)
+    # NOTE: frontend now sends this as "role", not "department" — updated to match.
+    role = data.get("role")
 
     if not name or not email or not password or not number or not role:
         return jsonify({
-            "success": False, 
+            "success": False,
             "error": "All fields are required"
         }), 400
 
@@ -579,7 +566,7 @@ def get_items():
 
         cursor.execute(
             """
-            SELECT itemid, category, status, image, location, date
+            SELECT itemid, category, status, image, location, date, reportedbyuserid
             FROM itemlist order by date desc;
             """
         )
@@ -596,7 +583,8 @@ def get_items():
                 "status": row[2],
                 "image": row[3],
                 "location": row[4],
-                "date": row[5].isoformat()
+                "date": row[5].isoformat() if row[5] else None,
+                "reportedByUserID": row[6]
             }
             for row in rows
         ])
@@ -627,7 +615,10 @@ def debug_schema():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    
+
+UPLOAD_FOLDER = "uploads"  # make sure this folder exists next to your Flask file
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
 @app.route("/add/lost", methods=["POST"])
 def add_lost():
     category = request.form.get("category")
@@ -671,11 +662,6 @@ def add_lost():
 
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
-
-
-# For backend
-UPLOAD_FOLDER = "uploads"  # make sure this folder exists next to your Flask file
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 @app.route("/add/found", methods=["POST"])
 def add_found():
@@ -722,26 +708,18 @@ def add_found():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-
 # Serves the uploaded images back out so <img src="..."> tags can load them
-from flask import send_from_directory
-
 @app.route("/uploads/<filename>")
 def serve_upload(filename):
     return send_from_directory(UPLOAD_FOLDER, filename)
 
-
-# ---------- 2. Delete an item report ----------
-# Used by the "Delete Report" button in the item detail modal.
-#
+# ---------- Delete an item report ----------
 # SECURITY NOTE: this checks that the userID sent in the request body
 # matches the item's reportedbyuserid — but since userID just comes from
 # the frontend's localStorage (not a verified login session/token), a
 # person could technically edit their browser's localStorage to claim a
 # different userID and bypass this check. This is "casual misuse"
-# protection, not real security. Proper protection needs server-side
-# sessions or auth tokens issued at login, which your app doesn't have
-# yet — worth flagging to your team as a follow-up.
+# protection, not real security.
 @app.route("/items/<int:item_id>", methods=["DELETE"])
 def delete_item(item_id):
     data = request.get_json() or {}
@@ -783,7 +761,6 @@ def delete_item(item_id):
 
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
-
 
 @app.route("/claims", methods=["POST"])
 def add_claim():
@@ -829,7 +806,6 @@ def add_claim():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-
 @app.route("/claims/user/<int:user_id>", methods=["GET"])
 def get_user_claims(user_id):
     try:
@@ -864,7 +840,6 @@ def get_user_claims(user_id):
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-
 @app.route("/claims/pending", methods=["GET"])
 def get_pending_claims():
     try:
@@ -898,7 +873,6 @@ def get_pending_claims():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-
 def send_claim_notification(to_email, approved, category):
     EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
     EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
@@ -922,7 +896,6 @@ def send_claim_notification(to_email, approved, category):
             smtp.send_message(msg)
     except Exception:
         pass
-
 
 def _review_claim(claim_id, new_status):
     data = request.get_json() or {}
@@ -956,7 +929,6 @@ def _review_claim(claim_id, new_status):
             (new_status, verifiedby, claim_id)
         )
 
-        # Reflect the outcome on the item itself
         item_status = "Claimed" if new_status == "Approved" else "Found"
         cursor.execute(
             "UPDATE itemlist SET status = %s WHERE itemid = %s;",
@@ -974,11 +946,9 @@ def _review_claim(claim_id, new_status):
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-
 @app.route("/claims/<int:claim_id>/approve", methods=["POST"])
 def approve_claim(claim_id):
     return _review_claim(claim_id, "Approved")
-
 
 @app.route("/claims/<int:claim_id>/reject", methods=["POST"])
 def reject_claim(claim_id):
@@ -988,5 +958,6 @@ if __name__ == "__main__":
     app.run(
         host="0.0.0.0",
         port=5000,
-        debug=True
+        debug=True,
+        use_reloader=False
     )

@@ -26,34 +26,21 @@
     <button type="submit">Submit</button>
 </form>
 
-<script>
-    document.getElementById("registerForm").addEventListener("submit", function(event) {
-        event.preventDefault();
+<div id="verificationSection" style="display: none;">
+    <h3>Verify your email</h3>
+    <p>Enter the 6 digit verification code sent to your email.</p>
+    <input
+        type="text"
+        id="verificationCode"
+        placeholder="Enter verification code"
+        maxlength="6"
+        required>
+    <br><br>
+    <button type="button" onclick="verifyEmail()">
+        Verify Email
+    </button>
+</div>
 
-        const userData = {
-            username: document.getElementById("name").value,
-            email: document.getElementById("email").value,
-            password: document.getElementById("password").value,
-            phone_number: document.getElementById("phone").value,
-            department: document.getElementById("department").value,
-            usertype: "lecturer"
-        };
-
-        fetch("https://legion-is-here.tail208289.ts.net/add/lecturer", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify(userData)
-        })
-        .then(response => response.json())
-        .then(data => {
-            alert(data.message);
-        })
-        .catch(error => {
-            console.error("Error:", error);
-        });
-    });
-</script>
+<script src="scripts.js"></script>
 </body>
 </html>
