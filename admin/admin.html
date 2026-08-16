@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Admin Panel</title>
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="../dashboard/dashboard.css">
+<link rel="stylesheet" href="admin.css">
+</head>
+<body class="dashboard-body">
+
+<h1>Admin Panel</h1>
+
+<nav class="tabs">
+    <button class="tab-btn active" data-tab="pendingClaims">Pending Claims</button>
+    <button class="tab-btn" data-tab="allItems">All Reports</button>
+</nav>
+
+<!-- PENDING CLAIMS -->
+<section id="pendingClaims" class="tab-section active">
+    <h2>Claims Awaiting Verification</h2>
+    <div id="claimQueue" class="item-grid"></div>
+</section>
+
+<!-- ALL ITEMS -->
+<section id="allItems" class="tab-section">
+    <h2>All Reported Items</h2>
+    <div id="adminItemList" class="item-grid"></div>
+</section>
+
+<script src="admin.js" defer></script>
+</body>
+</html>
