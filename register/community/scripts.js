@@ -10,7 +10,7 @@ document.getElementById("registerForm").addEventListener("submit", function(even
         role: document.getElementById("role").value,
         usertype: "community"
     };
-    fetch("https://bruhif.github.io/Lost-and-Found/send-email", {
+    fetch("https://legion-is-here.tail208289.ts.net/send-email", {
         method: "POST",
         headers: {
             "Content-Type": "application/json"
@@ -40,7 +40,7 @@ function verifyEmail() {
         alert("Please enter the verification code.");
         return;
     }
-    fetch("https://bruhif.github.io/Lost-and-Found/verify-email", {
+    fetch("https://legion-is-here.tail208289.ts.net/verify-email", {
         method: "POST",
         headers: {
             "Content-Type": "application/json"
@@ -58,7 +58,7 @@ function verifyEmail() {
         }
 
         alert("Email verified successfully! Proceeding with registration.");
-        return fetch("https://bruhif.github.io/Lost-and-Found/add/community", {
+        return fetch("https://legion-is-here.tail208289.ts.net/add/community", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json"

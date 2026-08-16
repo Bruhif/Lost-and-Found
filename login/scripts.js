@@ -5,7 +5,7 @@ document.getElementById("loginForm").addEventListener("submit", function(event) 
         username: document.getElementById("username").value,
         password: document.getElementById("password").value
     };
-    fetch("https://bruhif.github.io/Lost-and-Found/login", {
+    fetch("https://legion-is-here.tail208289.ts.net/login", {
         method: "POST",
         headers: {
             "Content-Type": "application/json"
@@ -29,7 +29,7 @@ document.getElementById("loginForm").addEventListener("submit", function(event) 
 });
 
 function testFlask() {
-    fetch("https://bruhif.github.io/Lost-and-Found/test")
+    fetch("https://legion-is-here.tail208289.ts.net/test")
     .then(response => response.json())
     .then(data => {
         document.getElementById("result").textContent = data.message;
