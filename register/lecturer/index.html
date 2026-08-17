@@ -1,34 +1,37 @@
-<body>
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Lecturer Registration</title>
+        <link rel="stylesheet" href="../../style.css">
+    </head>
+    <body>
 
-<h2>Lecturer Registration Form</h2>
+    <h2>Lecturer Registration Form</h2>
 
     <form id="registerForm">
-        <input type="text" id="name" placeholder="Username">
-        <br><br>
-        <input type="email" id="email" placeholder="Email">
-        <br><br>
-        <input type="password" id="password" placeholder="Password">
-        <br><br>
-        <input type="text" id="phone" placeholder="Phone Number">
-        <br><br>
-        <select name="department" id="department">
+        <input type="text" id="name" placeholder="Username" required>
+        <input type="email" id="email" placeholder="Email" required>
+        <input type="password" id="password" placeholder="Password" required>
+        <input type="text" id="phone" placeholder="Phone Number" required>
+
+        <select name="department" id="department" required>
             <option value="">Select Department</option>
             <option value="Information Technology">Information Technology</option>
             <option value="Accounting">Accounting</option>
             <option value="Management">Management</option>
             <option value="Psychology">Psychology</option>
         </select>
-        <br><br>
+
         <button type="submit">Submit</button>
     </form>
 
     <div id="verificationSection" style="display: none;">
         <h3>Verify your email</h3>
         <p>Enter the 6 digit verification code sent to your email.</p>
-
-        <input 
-            type="text" 
-            id="verificationCode" 
+        <input
+            type="text"
+            id="verificationCode"
             placeholder="Enter verification code"
             maxlength="6"
             required>
@@ -39,5 +42,5 @@
     </div>
 
     <script src="scripts.js"></script>
-
-</body>
+    </body>
+</html>
