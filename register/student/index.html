@@ -1,51 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Student Registration</title>
+<link rel="stylesheet" href="../../style.css">
+</head>
 <body>
 
 <h2>Student Registration Form</h2>
 
-    <form id="registerForm">
-        <input type="text" id="name" placeholder="Username" required>
-        <br><br>
-        <input type="email" id="email" placeholder="Email" required>
-        <br><br>
-        <input type="password" id="password" placeholder="Password" required>
-        <br><br>
-        <input type="text" id="phone" placeholder="Phone Number" required>
-        <br><br>
-        <select name="department" id="department">
-            <option value="">Select Department</option>
-            <option value="Information Technology">Information Technology</option>
-            <option value="Accounting">Accounting</option>
-            <option value="Management">Management</option>
-            <option value="Psychology">Psychology</option>
-        </select>
-        <br><br>
-        <select name="Year" id="year">
-            <option value="">Select Year</option>
-            <option value="1">1st Year</option>
-            <option value="2">2nd Year</option>
-            <option value="3">3rd Year</option>
-            <option value="4">4th Year</option>
-        </select>
-        <br><br>
-        <button type="submit">Submit</button>
-    </form>
+<form id="registerForm">
+    <input type="text" id="name" placeholder="Username" required>
+    <input type="email" id="email" placeholder="Email" required>
+    <input type="password" id="password" placeholder="Password" required>
+    <input type="text" id="phone" placeholder="Phone Number" required>
 
-    <div id="verificationSection" style="display: none;">
-        <h3>Verify your email</h3>
-        <p>Enter the 6 digit verification code sent to your email.</p>
+    <select name="department" id="department" required>
+        <option value="">Select Department</option>
+        <option value="Information Technology">Information Technology</option>
+        <option value="Accounting">Accounting</option>
+        <option value="Management">Management</option>
+        <option value="Psychology">Psychology</option>
+    </select>
 
-        <input 
-            type="text" 
-            id="verificationCode" 
-            placeholder="Enter verification code"
-            maxlength="6"
-            required>
-        <br><br>
-        <button type="button" onclick="verifyEmail()">
-            Verify Email
-        </button>
-    </div>
+    <select name="Year" id="year" required>
+        <option value="">Select Year</option>
+        <option value="1">1st Year</option>
+        <option value="2">2nd Year</option>
+        <option value="3">3rd Year</option>
+        <option value="4">4th Year</option>
+    </select>
 
-    <script src="scripts.js"></script>
+    <button type="submit">Submit</button>
+</form>
 
+<div id="verificationSection" style="display: none;">
+    <h3>Verify your email</h3>
+    <p>Enter the 6 digit verification code sent to your email.</p>
+    <input
+        type="text"
+        id="verificationCode"
+        placeholder="Enter verification code"
+        maxlength="6"
+        required>
+    <br><br>
+    <button type="button" onclick="verifyEmail()">
+        Verify Email
+    </button>
+</div>
+
+<script src="scripts.js"></script>
 </body>
+</html>

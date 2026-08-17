@@ -1,42 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Community Registration</title>
+<link rel="stylesheet" href="../../style.css">
+</head>
 <body>
 
 <h2>Community Registration Form</h2>
 
-    <form id="registerForm">
-        <input type="text" id="name" placeholder="Username">
-        <br><br>
-        <input type="email" id="email" placeholder="Email">
-        <br><br>
-        <input type="password" id="password" placeholder="Password">
-        <br><br>
-        <input type="text" id="phone" placeholder="Phone Number">
-        <br><br>
-        <select name="role" id="role">
-            <option value="">Select Role</option>
-            <option value="staff">Staff</option>
-            <option value="security">Security</option>
-            <option value="visitor">Visitor</option>
-        </select>
-        <br><br>
-        <button type="submit">Submit</button>
-    </form>
+<form id="registerForm">
+    <input type="text" id="name" placeholder="Username" required>
+    <input type="email" id="email" placeholder="Email" required>
+    <input type="password" id="password" placeholder="Password" required>
+    <input type="text" id="phone" placeholder="Phone Number" required>
 
-    <div id="verificationSection" style="display: none;">
-        <h3>Verify your email</h3>
-        <p>Enter the 6 digit verification code sent to your email.</p>
+    <select name="role" id="role" required>
+        <option value="">Select Role</option>
+        <option value="staff">Staff</option>
+        <option value="Security">Security</option>
+        <option value="guest">Guest</option>
+    </select>
 
-        <input 
-            type="text" 
-            id="verificationCode" 
-            placeholder="Enter verification code"
-            maxlength="6"
-            required>
-        <br><br>
-        <button type="button" onclick="verifyEmail()">
-            Verify Email
-        </button>
-    </div>
+    <button type="submit">Submit</button>
+</form>
 
-    <script src="scripts.js"></script>
+<div id="verificationSection" style="display: none;">
+    <h3>Verify your email</h3>
+    <p>Enter the 6 digit verification code sent to your email.</p>
+    <input
+        type="text"
+        id="verificationCode"
+        placeholder="Enter verification code"
+        maxlength="6"
+        required>
+    <br><br>
+    <button type="button" onclick="verifyEmail()">
+        Verify Email
+    </button>
+</div>
 
+<script src="scripts.js"></script>
 </body>
+</html>
