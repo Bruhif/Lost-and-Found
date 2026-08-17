@@ -13,7 +13,7 @@ function authHeaders(extra) {
     return Object.assign({ "Authorization": `Bearer ${authToken}` }, extra || {});
 }
 
-// See dashboard.js for why this exists: without it, an error response
+// See scripts.js for why this exists: without it, an error response
 // (e.g. an expired token) gets handed straight to a render function that
 // expects an array, and silently displays as "nothing here" instead of
 // surfacing the real problem.
@@ -65,6 +65,9 @@ function loadPendingClaims() {
         });
 }
 
+// Groups claims by item so competing claims on the same Found item render
+// together — that's the whole point of Option B: the admin needs to see
+// every claimant on an item side by side to judge who's telling the truth.
 function renderClaimQueue(claims) {
     const container = document.getElementById("claimQueue");
     container.innerHTML = "";
@@ -74,43 +77,62 @@ function renderClaimQueue(claims) {
         return;
     }
 
+    const byItem = {};
     claims.forEach(function (claim) {
-        const card = document.createElement("div");
-        card.className = "item-card";
-        card.innerHTML = `
-            <span class="status-badge">${claim.claimstatus}</span>
-            <h4>Item #${claim.itemid}</h4>
-            <p>Claimed by user #${claim.claimuserid}</p>
-            <p>Date: ${claim.claimdate}</p>
-        `;
+        if (!byItem[claim.itemid]) byItem[claim.itemid] = [];
+        byItem[claim.itemid].push(claim);
+    });
 
-        const actions = document.createElement("div");
-        actions.className = "claim-actions";
+    Object.keys(byItem).forEach(function (itemid) {
+        const itemClaims = byItem[itemid];
 
-        const approveBtn = document.createElement("button");
-        approveBtn.textContent = "Approve";
-        approveBtn.type = "button";
-        approveBtn.className = "approve-btn";
-        approveBtn.addEventListener("click", function () {
-            reviewClaim(claim.claimid, "approve");
+        const group = document.createElement("div");
+        group.className = "claim-group";
+        group.innerHTML = `<h4>Item #${itemid}${itemClaims.length > 1 ? ` — ${itemClaims.length} competing claims` : ''}</h4>`;
+
+        itemClaims.forEach(function (claim) {
+            const card = document.createElement("div");
+            card.className = "item-card";
+            card.innerHTML = `
+                <span class="status-badge">${claim.claimstatus}</span>
+                <p>Claimed by user #${claim.claimuserid}</p>
+                <p>Date: ${claim.claimdate}</p>
+                <p>${claim.verificationnotes || 'No description provided'}</p>
+            `;
+
+            const actions = document.createElement("div");
+            actions.className = "claim-actions";
+
+            const approveBtn = document.createElement("button");
+            approveBtn.textContent = "Approve";
+            approveBtn.type = "button";
+            approveBtn.className = "approve-btn";
+            approveBtn.addEventListener("click", function () {
+                reviewClaim(claim.claimid, "approve");
+            });
+
+            const rejectBtn = document.createElement("button");
+            rejectBtn.textContent = "Reject";
+            rejectBtn.type = "button";
+            rejectBtn.className = "reject-btn";
+            rejectBtn.addEventListener("click", function () {
+                reviewClaim(claim.claimid, "reject");
+            });
+
+            actions.appendChild(approveBtn);
+            actions.appendChild(rejectBtn);
+            card.appendChild(actions);
+            group.appendChild(card);
         });
 
-        const rejectBtn = document.createElement("button");
-        rejectBtn.textContent = "Reject";
-        rejectBtn.type = "button";
-        rejectBtn.className = "reject-btn";
-        rejectBtn.addEventListener("click", function () {
-            reviewClaim(claim.claimid, "reject");
-        });
-
-        actions.appendChild(approveBtn);
-        actions.appendChild(rejectBtn);
-        card.appendChild(actions);
-        container.appendChild(card);
+        container.appendChild(group);
     });
 }
 
-// These also trigger the claim notification email server-side.
+// Approving one claim auto-rejects every other pending claim on the same
+// item server-side (see _review_claim in connection.py) — that's also
+// why we just reload the whole queue after either action, rather than
+// only removing the one card that was acted on.
 function reviewClaim(claimID, action) {
     const label = action === "approve" ? "approve" : "reject";
     if (!confirm(`Are you sure you want to ${label} this claim?`)) return;

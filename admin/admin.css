@@ -21,3 +21,12 @@
 .reject-btn {
     background-color: #b30000;
 }
+
+.claim-group {
+    margin-bottom: 24px;
+}
+
+.claim-group h4 {
+    color: #b30000;
+    margin-bottom: 8px;
+}
