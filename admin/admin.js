@@ -13,6 +13,29 @@ function authHeaders(extra) {
     return Object.assign({ "Authorization": `Bearer ${authToken}` }, extra || {});
 }
 
+// See dashboard.js for why this exists: without it, an error response
+// (e.g. an expired token) gets handed straight to a render function that
+// expects an array, and silently displays as "nothing here" instead of
+// surfacing the real problem.
+function handleApiResponse(response) {
+    if (response.status === 401 || response.status === 403) {
+        alert("Your admin session has expired or is invalid. Please log in again.");
+        localStorage.removeItem("adminID");
+        localStorage.removeItem("adminToken");
+        window.location.href = "../login/admin_login.html";
+        const sessionError = new Error("Session expired");
+        sessionError.handled = true;
+        throw sessionError;
+    }
+
+    return response.json().then(function (data) {
+        if (!response.ok || (data && data.success === false)) {
+            throw new Error((data && data.error) || "Request failed");
+        }
+        return data;
+    });
+}
+
 // ---------- TAB SWITCHING ----------
 const buttons = document.querySelectorAll(".tab-btn");
 const sections = document.querySelectorAll(".tab-section");
@@ -33,11 +56,12 @@ buttons.forEach(function (btn) {
 // ---------- PENDING CLAIMS ----------
 function loadPendingClaims() {
     fetch(`${API_BASE}/claims/pending`, { headers: authHeaders() })
-        .then(function (response) { return response.json(); })
+        .then(handleApiResponse)
         .then(function (claims) { renderClaimQueue(claims); })
         .catch(function (error) {
+            if (error.handled) return;
             console.error("Error loading pending claims:", error);
-            alert("Couldn't reach the server. Please check your connection and try again.");
+            alert(error.message || "Couldn't reach the server. Please check your connection and try again.");
         });
 }
 
@@ -109,11 +133,12 @@ function reviewClaim(claimID, action) {
 // ---------- ALL ITEMS ----------
 function loadAllItems() {
     fetch(`${API_BASE}/items`)
-        .then(function (response) { return response.json(); })
+        .then(handleApiResponse)
         .then(function (items) { renderAllItems(items); })
         .catch(function (error) {
+            if (error.handled) return;
             console.error("Error loading items:", error);
-            alert("Couldn't reach the server. Please check your connection and try again.");
+            alert(error.message || "Couldn't reach the server. Please check your connection and try again.");
         });
 }
 

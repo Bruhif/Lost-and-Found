@@ -6,6 +6,8 @@ import secrets
 from datetime import datetime, timedelta
 from unittest import result
 from functools import wraps
+from contextlib import contextmanager
+import uuid
 
 import jwt
 
@@ -111,6 +113,47 @@ def require_auth(role=None):
 def get_connection():
     return psycopg2.connect(**DB_CONFIG)
 
+
+def get_json_body():
+    """
+    Like request.get_json(), but never lets a technically-valid-but-wrong-
+    shaped JSON body (literal null, an array, a bare number/string) reach
+    route code that assumes it can call .get() on the result. Returns None
+    if the body isn't a JSON object; routes should check for that and
+    return a 400 rather than crashing with an unhandled AttributeError.
+    """
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return None
+    return data
+
+
+@contextmanager
+def db_cursor():
+    """
+    Use as: with db_cursor() as (conn, cursor): ...
+
+    Guarantees the connection and cursor are ALWAYS closed, whether the
+    route finishes normally or raises — the old pattern of manually calling
+    cursor.close()/conn.close() only in the success path meant every error
+    leaked an open connection to Postgres. Also auto-commits when the block
+    finishes without error, and auto-rolls-back if it raises, so a
+    partially-completed multi-step insert (e.g. add_student's Users row
+    followed by its student row) doesn't leave a dangling uncommitted
+    transaction either.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        yield conn, cursor
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cursor.close()
+        conn.close()
+
 @app.route("/")
 def home():
     return jsonify({
@@ -131,7 +174,9 @@ def debug_routes():
 
 @app.route("/send-email", methods=["POST"])
 def send_email():
-    data = request.get_json()
+    data = get_json_body()
+    if data is None:
+        return jsonify({"success": False, "error": "Request body must be a JSON object"}), 400
 
     email = data.get("email")
 
@@ -166,39 +211,30 @@ def send_email():
     )
 
     try:
-        conn = get_connection()
-        cursor = conn.cursor()
+        with db_cursor() as (conn, cursor):
+            # Clear out old/expired verification rows before inserting a new one
+            cursor.execute("""
+                DELETE FROM emailverification
+                WHERE expiresat < NOW()
+                OR (verified = TRUE AND createdat < NOW() - INTERVAL '1 hour');
+            """)
 
-        # Clear out old/expired verification rows before inserting a new one
-        cursor.execute("""
-            DELETE FROM emailverification
-            WHERE expiresat < NOW()
-            OR (verified = TRUE AND createdat < NOW() - INTERVAL '1 hour');
-        """)
+            query = """
+                INSERT INTO emailverification (email, code, createdat, expiresat, verified)
+                VALUES (%s, %s, %s, %s, %s)
+                RETURNING verificationid;
+            """
 
-        conn.commit()
+            values = (
+                email,
+                code,
+                datetime.now(),
+                expires_at,
+                False
+            )
 
-        query = """
-            INSERT INTO emailverification (email, code, createdat, expiresat, verified)
-            VALUES (%s, %s, %s, %s, %s)
-            RETURNING verificationid;
-        """
-
-        values = (
-            email,
-            code,
-            datetime.now(),
-            expires_at,
-            False
-        )
-
-        cursor.execute(query, values)
-
-        verification_id = cursor.fetchone()[0]
-
-        conn.commit()
-
-        cursor.close()
+            cursor.execute(query, values)
+            verification_id = cursor.fetchone()[0]
 
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
             smtp.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
@@ -217,7 +253,9 @@ def send_email():
 @app.route("/verify-email", methods=["POST"])
 def verify_email():
 
-    data = request.get_json()
+    data = get_json_body()
+    if data is None:
+        return jsonify({"success": False, "error": "Request body must be a JSON object"}), 400
 
     email = data.get("email")
     code = data.get("code")
@@ -229,73 +267,54 @@ def verify_email():
         }), 400
 
     try:
-        conn = get_connection()
-        cursor = conn.cursor()
+        with db_cursor() as (conn, cursor):
+            query = """
+                SELECT verificationid, code, expiresat, verified
+                FROM emailverification
+                WHERE email = %s
+                ORDER BY verificationid DESC
+                LIMIT 1;
+            """
 
-        query = """
-            SELECT verificationid, code, expiresat, verified
-            FROM emailverification
-            WHERE email = %s
-            ORDER BY verificationid DESC
-            LIMIT 1;
-        """
+            cursor.execute(query, (email,))
+            verification = cursor.fetchone()
 
-        cursor.execute(query, (email,))
-        verification = cursor.fetchone()
+            if not verification:
+                return jsonify({
+                    "success": False,
+                    "error": "No verification code found for this email"
+                }), 400
 
-        if not verification:
-            cursor.close()
-            conn.close()
+            verification_id = verification[0]
+            stored_code = verification[1]
+            expires_at = verification[2]
+            verified = verification[3]
 
-            return jsonify({
-                "success": False,
-                "error": "No verification code found for this email"
-            }), 400
+            if verified:
+                return jsonify({
+                    "success": False,
+                    "error": "Email has already been verified"
+                }), 400
 
-        verification_id = verification[0]
-        stored_code = verification[1]
-        expires_at = verification[2]
-        verified = verification[3]
+            if datetime.now() > expires_at:
+                return jsonify({
+                    "success": False,
+                    "error": "Verification code has expired"
+                }), 400
 
-        if verified:
-            cursor.close()
-            conn.close()
+            if code != stored_code:
+                return jsonify({
+                    "success": False,
+                    "error": "Invalid verification code"
+                }), 400
 
-            return jsonify({
-                "success": False,
-                "error": "Email has already been verified"
-            }), 400
+            update_query = """
+                UPDATE emailverification
+                SET verified = TRUE
+                WHERE verificationid = %s;
+            """
 
-        if datetime.now() > expires_at:
-            cursor.close()
-            conn.close()
-
-            return jsonify({
-                "success": False,
-                "error": "Verification code has expired"
-            }), 400
-
-        if code != stored_code:
-            cursor.close()
-            conn.close()
-
-            return jsonify({
-                "success": False,
-                "error": "Invalid verification code"
-            }), 400
-
-        update_query = """
-            UPDATE emailverification
-            SET verified = TRUE
-            WHERE verificationid = %s;
-        """
-
-        cursor.execute(update_query, (verification_id,))
-
-        conn.commit()
-
-        cursor.close()
-        conn.close()
+            cursor.execute(update_query, (verification_id,))
 
         return jsonify({
             "success": True,
@@ -310,7 +329,9 @@ def verify_email():
 
 @app.route("/login", methods=["POST"])
 def login():
-    data = request.get_json()
+    data = get_json_body()
+    if data is None:
+        return jsonify({"success": False, "error": "Request body must be a JSON object"}), 400
 
     username = data.get("username")
     password = data.get("password")
@@ -322,20 +343,15 @@ def login():
         }), 400
 
     try:
-        conn = get_connection()
-        cursor = conn.cursor()
+        with db_cursor() as (conn, cursor):
+            query = """
+                SELECT userid, username, email, usertype, password
+                FROM Users
+                WHERE username = %s;
+            """
 
-        query = """
-            SELECT userid, username, email, usertype, password
-            FROM Users
-            WHERE username = %s;
-        """
-
-        cursor.execute(query, (username,))
-        user = cursor.fetchone()
-
-        cursor.close()
-        conn.close()
+            cursor.execute(query, (username,))
+            user = cursor.fetchone()
 
         if user:
             if check_password_hash(user[4], password):
@@ -367,11 +383,12 @@ def login():
 
 @app.route("/add/student", methods=["POST"])
 def add_student():
-    data = request.get_json()
+    data = get_json_body()
+    if data is None:
+        return jsonify({"success": False, "error": "Request body must be a JSON object"}), 400
 
     name = data.get("username")
     email = data.get("email")
-    hashed_password = generate_password_hash(data.get("password"))
     password = data.get("password")
     number = data.get("phone_number")
     usertype = data.get("usertype")
@@ -384,67 +401,58 @@ def add_student():
             "error": "All fields are required"
         }), 400
 
+    hashed_password = generate_password_hash(password)
+
     try:
-        conn = get_connection()
-        cursor = conn.cursor()
+        with db_cursor() as (conn, cursor):
+            verify_query = """
+                SELECT verified
+                FROM emailverification
+                WHERE email = %s
+                ORDER BY verificationid DESC
+                LIMIT 1;
+            """
 
-        verify_query = """
-            SELECT verified
-            FROM emailverification
-            WHERE email = %s
-            ORDER BY verificationid DESC
-            LIMIT 1;
-        """
+            cursor.execute(verify_query, (email,))
+            verification = cursor.fetchone()
 
-        cursor.execute(verify_query, (email,))
-        verification = cursor.fetchone()
+            if not verification or not verification[0]:
+                return jsonify({
+                    "success": False,
+                    "error": "Email is not verified"
+                }), 400
 
-        if not verification or not verification[0]:
-            cursor.close()
-            conn.close()
+            userquery = """
+                INSERT INTO Users (username, email, password, phone_number, usertype)
+                VALUES (%s, %s, %s, %s, %s)
+                RETURNING userid;
+            """
 
-            return jsonify({
-                "success": False,
-                "error": "Email is not verified"
-            }), 400
+            values = (
+                name,
+                email,
+                hashed_password,
+                number,
+                usertype
+            )
 
-        userquery = """
-            INSERT INTO Users (username, email, password, phone_number, usertype)
-            VALUES (%s, %s, %s, %s, %s)
-            RETURNING userid;
-        """
+            cursor.execute(userquery, values)
+            user_id = cursor.fetchone()[0]
 
-        values = (
-            name,
-            email,
-            hashed_password,
-            number,
-            usertype
-        )
+            studentquery = """
+                INSERT INTO student (userid, student_department, student_year)
+                VALUES (%s, %s, %s)
+                RETURNING userid;
+            """
 
-        cursor.execute(userquery, values)
+            student_values = (
+                user_id,
+                department,
+                year
+            )
 
-        user_id = cursor.fetchone()[0]
-
-        studentquery = """
-            INSERT INTO student (userid, student_department, student_year)
-            VALUES (%s, %s, %s)
-            RETURNING userid;
-        """
-
-        student_values = (
-            user_id,
-            department,
-            year
-        )
-
-        cursor.execute(studentquery, student_values)
-
-        student_id = cursor.fetchone()[0]
-        conn.commit()
-
-        cursor.close()
-        conn.close()
+            cursor.execute(studentquery, student_values)
+            student_id = cursor.fetchone()[0]
 
         return jsonify({
             "success": True,
@@ -462,11 +470,12 @@ def add_student():
 
 @app.route("/add/lecturer", methods=["POST"])
 def add_lecturer():
-    data = request.get_json()
+    data = get_json_body()
+    if data is None:
+        return jsonify({"success": False, "error": "Request body must be a JSON object"}), 400
 
     name = data.get("username")
     email = data.get("email")
-    hashed_password = generate_password_hash(data.get("password"))
     password = data.get("password")
     number = data.get("phone_number")
     usertype = data.get("usertype")
@@ -478,66 +487,57 @@ def add_lecturer():
             "error": "All fields are required"
         }), 400
 
+    hashed_password = generate_password_hash(password)
+
     try:
-        conn = get_connection()
-        cursor = conn.cursor()
+        with db_cursor() as (conn, cursor):
+            verify_query = """
+                SELECT verified
+                FROM emailverification
+                WHERE email = %s
+                ORDER BY verificationid DESC
+                LIMIT 1;
+            """
 
-        verify_query = """
-            SELECT verified
-            FROM emailverification
-            WHERE email = %s
-            ORDER BY verificationid DESC
-            LIMIT 1;
-        """
+            cursor.execute(verify_query, (email,))
+            verification = cursor.fetchone()
 
-        cursor.execute(verify_query, (email,))
-        verification = cursor.fetchone()
+            if not verification or not verification[0]:
+                return jsonify({
+                    "success": False,
+                    "error": "Email is not verified"
+                }), 400
 
-        if not verification or not verification[0]:
-            cursor.close()
-            conn.close()
+            userquery = """
+                INSERT INTO Users (username, email, password, phone_number, usertype)
+                VALUES (%s, %s, %s, %s, %s)
+                RETURNING userid;
+            """
 
-            return jsonify({
-                "success": False,
-                "error": "Email is not verified"
-            }), 400
+            values = (
+                name,
+                email,
+                hashed_password,
+                number,
+                usertype
+            )
 
-        userquery = """
-            INSERT INTO Users (username, email, password, phone_number, usertype)
-            VALUES (%s, %s, %s, %s, %s)
-            RETURNING userid;
-        """
+            cursor.execute(userquery, values)
+            user_id = cursor.fetchone()[0]
 
-        values = (
-            name,
-            email,
-            hashed_password,
-            number,
-            usertype
-        )
+            lecturerquery = """
+                INSERT INTO lecturer (userid, lecturer_department)
+                VALUES (%s, %s)
+                RETURNING userid;
+            """
 
-        cursor.execute(userquery, values)
+            lecturer_values = (
+                user_id,
+                department
+            )
 
-        user_id = cursor.fetchone()[0]
-
-        lecturerquery = """
-            INSERT INTO lecturer (userid, lecturer_department)
-            VALUES (%s, %s)
-            RETURNING userid;
-        """
-
-        lecturer_values = (
-            user_id,
-            department
-        )
-
-        cursor.execute(lecturerquery, lecturer_values)
-
-        lecturer_id = cursor.fetchone()[0]
-        conn.commit()
-
-        cursor.close()
-        conn.close()
+            cursor.execute(lecturerquery, lecturer_values)
+            lecturer_id = cursor.fetchone()[0]
 
         return jsonify({
             "success": True,
@@ -555,11 +555,12 @@ def add_lecturer():
 
 @app.route("/add/community", methods=["POST"])
 def add_community():
-    data = request.get_json()
+    data = get_json_body()
+    if data is None:
+        return jsonify({"success": False, "error": "Request body must be a JSON object"}), 400
 
     name = data.get("username")
     email = data.get("email")
-    hashed_password = generate_password_hash(data.get("password"))
     password = data.get("password")
     number = data.get("phone_number")
     usertype = data.get("usertype")
@@ -572,66 +573,57 @@ def add_community():
             "error": "All fields are required"
         }), 400
 
+    hashed_password = generate_password_hash(password)
+
     try:
-        conn = get_connection()
-        cursor = conn.cursor()
+        with db_cursor() as (conn, cursor):
+            verify_query = """
+                SELECT verified
+                FROM emailverification
+                WHERE email = %s
+                ORDER BY verificationid DESC
+                LIMIT 1;
+            """
 
-        verify_query = """
-            SELECT verified
-            FROM emailverification
-            WHERE email = %s
-            ORDER BY verificationid DESC
-            LIMIT 1;
-        """
+            cursor.execute(verify_query, (email,))
+            verification = cursor.fetchone()
 
-        cursor.execute(verify_query, (email,))
-        verification = cursor.fetchone()
+            if not verification or not verification[0]:
+                return jsonify({
+                    "success": False,
+                    "error": "Email is not verified"
+                }), 400
 
-        if not verification or not verification[0]:
-            cursor.close()
-            conn.close()
+            userquery = """
+                INSERT INTO Users (username, email, password, phone_number, usertype)
+                VALUES (%s, %s, %s, %s, %s)
+                RETURNING userid;
+            """
 
-            return jsonify({
-                "success": False,
-                "error": "Email is not verified"
-            }), 400
+            values = (
+                name,
+                email,
+                hashed_password,
+                number,
+                usertype
+            )
 
-        userquery = """
-            INSERT INTO Users (username, email, password, phone_number, usertype)
-            VALUES (%s, %s, %s, %s, %s)
-            RETURNING userid;
-        """
+            cursor.execute(userquery, values)
+            user_id = cursor.fetchone()[0]
 
-        values = (
-            name,
-            email,
-            hashed_password,
-            number,
-            usertype
-        )
+            communityquery = """
+                INSERT INTO community (userid, community_role)
+                VALUES (%s, %s)
+                RETURNING userid;
+            """
 
-        cursor.execute(userquery, values)
+            community_values = (
+                user_id,
+                role
+            )
 
-        user_id = cursor.fetchone()[0]
-
-        communityquery = """
-            INSERT INTO community (userid, community_role)
-            VALUES (%s, %s)
-            RETURNING userid;
-        """
-
-        community_values = (
-            user_id,
-            role
-        )
-
-        cursor.execute(communityquery, community_values)
-
-        community_id = cursor.fetchone()[0]
-        conn.commit()
-
-        cursor.close()
-        conn.close()
+            cursor.execute(communityquery, community_values)
+            community_id = cursor.fetchone()[0]
 
         return jsonify({
             "success": True,
@@ -650,20 +642,14 @@ def add_community():
 @app.route("/items", methods=["GET"])
 def get_items():
     try:
-        conn = get_connection()
-        cursor = conn.cursor()
-
-        cursor.execute(
-            """
-            SELECT itemid, category, status, image, location, date, reportedbyuserid
-            FROM itemlist order by date desc;
-            """
-        )
-
-        rows = cursor.fetchall()
-
-        cursor.close()
-        conn.close()
+        with db_cursor() as (conn, cursor):
+            cursor.execute(
+                """
+                SELECT itemid, category, status, image, location, date, reportedbyuserid
+                FROM itemlist order by date desc;
+                """
+            )
+            rows = cursor.fetchall()
 
         return jsonify([
             {
@@ -687,18 +673,13 @@ def get_items():
 @app.route("/debug/schema", methods=["GET"])
 def debug_schema():
     try:
-        conn = get_connection()
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            SELECT column_name, data_type
-            FROM information_schema.columns
-            WHERE table_name = 'itemlist';
-        """)
-
-        columns = cursor.fetchall()
-        cursor.close()
-        conn.close()
+        with db_cursor() as (conn, cursor):
+            cursor.execute("""
+                SELECT column_name, data_type
+                FROM information_schema.columns
+                WHERE table_name = 'itemlist';
+            """)
+            columns = cursor.fetchall()
 
         return jsonify([{"column": c[0], "type": c[1]} for c in columns])
 
@@ -707,6 +688,31 @@ def debug_schema():
 
 UPLOAD_FOLDER = "uploads"  # make sure this folder exists next to your Flask file
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+
+def save_uploaded_image(image_file):
+    """
+    Saves an uploaded image and returns its public URL, or None if no file
+    was provided. Raises a plain Exception (caught by the caller's existing
+    try/except) on any failure, instead of letting it crash the request
+    unhandled the way the old inline version did.
+
+    Prefixes every filename with a random hex string so two different
+    uploads that happen to share an original filename (very common with
+    phone photos, e.g. "IMG_0001.jpg") never collide and overwrite each
+    other on disk.
+    """
+    if not image_file or not image_file.filename:
+        return None
+
+    original_name = secure_filename(image_file.filename)
+    if not original_name:
+        raise ValueError("Uploaded file has an invalid or empty filename.")
+
+    unique_name = f"{uuid.uuid4().hex}_{original_name}"
+    save_path = os.path.join(UPLOAD_FOLDER, unique_name)
+    image_file.save(save_path)
+    return f"{request.host_url}uploads/{unique_name}"
 
 @app.route("/add/lost", methods=["POST"])
 @require_auth(role="user")
@@ -719,30 +725,18 @@ def add_lost():
     if not category or not status or not date:
         return jsonify({"success": False, "error": "All fields are required"}), 400
 
-    image_path = None
-    image_file = request.files.get("image")
-    if image_file and image_file.filename:
-        filename = secure_filename(image_file.filename)
-        save_path = os.path.join(UPLOAD_FOLDER, filename)
-        image_file.save(save_path)
-        image_path = f"{request.host_url}uploads/{filename}"
-
     try:
-        conn = get_connection()
-        cursor = conn.cursor()
+        image_path = save_uploaded_image(request.files.get("image"))
 
-        query = """
-            INSERT INTO itemlist (category, status, date, image, reportedbyuserid)
-            VALUES (%s, %s, %s, %s, %s)
-            RETURNING itemid;
-        """
-        values = (category, status, date, image_path, reportedbyuserid)
-        cursor.execute(query, values)
-
-        item_id = cursor.fetchone()[0]
-        conn.commit()
-        cursor.close()
-        conn.close()
+        with db_cursor() as (conn, cursor):
+            query = """
+                INSERT INTO itemlist (category, status, date, image, reportedbyuserid)
+                VALUES (%s, %s, %s, %s, %s)
+                RETURNING itemid;
+            """
+            values = (category, status, date, image_path, reportedbyuserid)
+            cursor.execute(query, values)
+            item_id = cursor.fetchone()[0]
 
         return jsonify({
             "success": True,
@@ -765,30 +759,18 @@ def add_found():
     if not category or not location or not date:
         return jsonify({"success": False, "error": "All fields are required"}), 400
 
-    image_path = None
-    image_file = request.files.get("image")
-    if image_file and image_file.filename:
-        filename = secure_filename(image_file.filename)
-        save_path = os.path.join(UPLOAD_FOLDER, filename)
-        image_file.save(save_path)
-        image_path = f"{request.host_url}uploads/{filename}"
-
     try:
-        conn = get_connection()
-        cursor = conn.cursor()
+        image_path = save_uploaded_image(request.files.get("image"))
 
-        query = """
-            INSERT INTO itemlist (category, status, location, date, image, reportedbyuserid)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            RETURNING itemid;
-        """
-        values = (category, status, location, date, image_path, reportedbyuserid)
-        cursor.execute(query, values)
-
-        item_id = cursor.fetchone()[0]
-        conn.commit()
-        cursor.close()
-        conn.close()
+        with db_cursor() as (conn, cursor):
+            query = """
+                INSERT INTO itemlist (category, status, location, date, image, reportedbyuserid)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING itemid;
+            """
+            values = (category, status, location, date, image_path, reportedbyuserid)
+            cursor.execute(query, values)
+            item_id = cursor.fetchone()[0]
 
         return jsonify({
             "success": True,
@@ -814,33 +796,23 @@ def delete_item(item_id):
     requesting_user_id = g.user_id
 
     try:
-        conn = get_connection()
-        cursor = conn.cursor()
+        with db_cursor() as (conn, cursor):
+            cursor.execute(
+                "SELECT reportedbyuserid FROM itemlist WHERE itemid = %s;",
+                (item_id,)
+            )
+            row = cursor.fetchone()
 
-        cursor.execute(
-            "SELECT reportedbyuserid FROM itemlist WHERE itemid = %s;",
-            (item_id,)
-        )
-        row = cursor.fetchone()
+            if not row:
+                return jsonify({"success": False, "error": "Item not found"}), 404
 
-        if not row:
-            cursor.close()
-            conn.close()
-            return jsonify({"success": False, "error": "Item not found"}), 404
+            actual_owner_id = row[0]
 
-        actual_owner_id = row[0]
+            if str(actual_owner_id) != str(requesting_user_id):
+                return jsonify({"success": False, "error": "You are not authorized to delete this item"}), 403
 
-        if str(actual_owner_id) != str(requesting_user_id):
-            cursor.close()
-            conn.close()
-            return jsonify({"success": False, "error": "You are not authorized to delete this item"}), 403
-
-        cursor.execute("DELETE FROM itemlist WHERE itemid = %s RETURNING itemid;", (item_id,))
-        deleted = cursor.fetchone()
-
-        conn.commit()
-        cursor.close()
-        conn.close()
+            cursor.execute("DELETE FROM itemlist WHERE itemid = %s RETURNING itemid;", (item_id,))
+            deleted = cursor.fetchone()
 
         return jsonify({"success": True, "message": "Item deleted successfully."})
 
@@ -850,7 +822,9 @@ def delete_item(item_id):
 @app.route("/claims", methods=["POST"])
 @require_auth(role="user")
 def add_claim():
-    data = request.get_json()
+    data = get_json_body()
+    if data is None:
+        return jsonify({"success": False, "error": "Request body must be a JSON object"}), 400
 
     itemid = data.get("itemid")
     claimuserid = g.user_id  # from the verified token, not the request body
@@ -861,20 +835,14 @@ def add_claim():
         return jsonify({"success": False, "error": "Required fields missing"}), 400
 
     try:
-        conn = get_connection()
-        cursor = conn.cursor()
-
-        query = """
-            INSERT INTO claims (itemid, claimuserid, claimdate, claimstatus)
-            VALUES (%s, %s, %s, %s)
-            RETURNING claimid;
-        """
-        cursor.execute(query, (itemid, claimuserid, claimdate, claimstatus))
-        claim_id = cursor.fetchone()[0]
-
-        conn.commit()
-        cursor.close()
-        conn.close()
+        with db_cursor() as (conn, cursor):
+            query = """
+                INSERT INTO claims (itemid, claimuserid, claimdate, claimstatus)
+                VALUES (%s, %s, %s, %s)
+                RETURNING claimid;
+            """
+            cursor.execute(query, (itemid, claimuserid, claimdate, claimstatus))
+            claim_id = cursor.fetchone()[0]
 
         return jsonify({
             "success": True,
@@ -889,21 +857,17 @@ def add_claim():
 @require_auth(role="user")
 def get_user_claims():
     try:
-        conn = get_connection()
-        cursor = conn.cursor()
-
-        cursor.execute(
-            """
-            SELECT claimid, itemid, claimuserid, claimdate, claimstatus
-            FROM claims
-            WHERE claimuserid = %s
-            ORDER BY claimdate DESC;
-            """,
-            (g.user_id,)
-        )
-        rows = cursor.fetchall()
-        cursor.close()
-        conn.close()
+        with db_cursor() as (conn, cursor):
+            cursor.execute(
+                """
+                SELECT claimid, itemid, claimuserid, claimdate, claimstatus
+                FROM claims
+                WHERE claimuserid = %s
+                ORDER BY claimdate DESC;
+                """,
+                (g.user_id,)
+            )
+            rows = cursor.fetchall()
 
         return jsonify([
             {
@@ -920,20 +884,16 @@ def get_user_claims():
 @require_auth(role="admin")
 def get_pending_claims():
     try:
-        conn = get_connection()
-        cursor = conn.cursor()
-
-        cursor.execute(
-            """
-            SELECT claimid, itemid, claimuserid, claimdate, claimstatus
-            FROM claims
-            WHERE claimstatus = 'Pending'
-            ORDER BY claimdate ASC;
-            """
-        )
-        rows = cursor.fetchall()
-        cursor.close()
-        conn.close()
+        with db_cursor() as (conn, cursor):
+            cursor.execute(
+                """
+                SELECT claimid, itemid, claimuserid, claimdate, claimstatus
+                FROM claims
+                WHERE claimstatus = 'Pending'
+                ORDER BY claimdate ASC;
+                """
+            )
+            rows = cursor.fetchall()
 
         return jsonify([
             {
@@ -974,42 +934,34 @@ def _review_claim(claim_id, new_status):
     verifiedby = g.admin_id  # from the verified admin token, not the request body
 
     try:
-        conn = get_connection()
-        cursor = conn.cursor()
+        with db_cursor() as (conn, cursor):
+            cursor.execute(
+                """
+                SELECT c.itemid, u.email, i.category
+                FROM claims c
+                JOIN users u ON c.claimuserid = u.userid
+                JOIN itemlist i ON c.itemid = i.itemid
+                WHERE c.claimid = %s;
+                """,
+                (claim_id,)
+            )
+            row = cursor.fetchone()
 
-        cursor.execute(
-            """
-            SELECT c.itemid, u.email, i.category
-            FROM claims c
-            JOIN users u ON c.claimuserid = u.userid
-            JOIN itemlist i ON c.itemid = i.itemid
-            WHERE c.claimid = %s;
-            """,
-            (claim_id,)
-        )
-        row = cursor.fetchone()
+            if not row:
+                return jsonify({"success": False, "error": "Claim not found"}), 404
 
-        if not row:
-            cursor.close()
-            conn.close()
-            return jsonify({"success": False, "error": "Claim not found"}), 404
+            itemid, claimant_email, category = row
 
-        itemid, claimant_email, category = row
+            cursor.execute(
+                "UPDATE claims SET claimstatus = %s, verifiedby = %s WHERE claimid = %s;",
+                (new_status, verifiedby, claim_id)
+            )
 
-        cursor.execute(
-            "UPDATE claims SET claimstatus = %s, verifiedby = %s WHERE claimid = %s;",
-            (new_status, verifiedby, claim_id)
-        )
-
-        # itemlist.status only allows 'Lost'/'Found' — only touch it on rejection,
-        # to put the item back to Found. On approval, leave itemlist.status alone;
-        # claim state (Pending/Approved/Rejected) already lives in claims.claimstatus.
-        if new_status == "Rejected":
-            cursor.execute("UPDATE itemlist SET status = %s WHERE itemid = %s;", ("Found", itemid))
-
-        conn.commit()
-        cursor.close()
-        conn.close()
+            # itemlist.status only allows 'Lost'/'Found' — only touch it on rejection,
+            # to put the item back to Found. On approval, leave itemlist.status alone;
+            # claim state (Pending/Approved/Rejected) already lives in claims.claimstatus.
+            if new_status == "Rejected":
+                cursor.execute("UPDATE itemlist SET status = %s WHERE itemid = %s;", ("Found", itemid))
 
         send_claim_notification(claimant_email, new_status == "Approved", category)
 
@@ -1030,7 +982,9 @@ def reject_claim(claim_id):
 
 @app.route("/admin/login", methods=["POST"])
 def admin_login():
-    data = request.get_json()
+    data = get_json_body()
+    if data is None:
+        return jsonify({"success": False, "error": "Request body must be a JSON object"}), 400
 
     email = data.get("email")
     password = data.get("password")
@@ -1039,17 +993,12 @@ def admin_login():
         return jsonify({"success": False, "error": "Email and password are required"}), 400
 
     try:
-        conn = get_connection()
-        cursor = conn.cursor()
-
-        cursor.execute(
-            "SELECT adminid, adminname, adminemail, password FROM admin WHERE adminemail = %s;",
-            (email,)
-        )
-        admin = cursor.fetchone()
-
-        cursor.close()
-        conn.close()
+        with db_cursor() as (conn, cursor):
+            cursor.execute(
+                "SELECT adminid, adminname, adminemail, password FROM admin WHERE adminemail = %s;",
+                (email,)
+            )
+            admin = cursor.fetchone()
 
         if admin and check_password_hash(admin[3], password):
             token = generate_token({

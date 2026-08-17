@@ -13,6 +13,32 @@ function authHeaders(extra) {
     return Object.assign({ "Authorization": `Bearer ${authToken}` }, extra || {});
 }
 
+// Every GET endpoint that feeds a render function expects an array back on
+// success. If the token is missing/expired, or something else goes wrong,
+// the server sends back {"success": false, "error": "..."} instead — an
+// object, not an array. Passed straight to something like renderClaims(),
+// `!claims.length` on that object is true (objects have no .length), so it
+// silently renders as "you have nothing" instead of surfacing the real
+// error. This handler catches that before it gets to the renderer.
+function handleApiResponse(response) {
+    if (response.status === 401) {
+        alert("Your session has expired. Please log in again.");
+        localStorage.removeItem("userID");
+        localStorage.removeItem("token");
+        window.location.href = "../login/";
+        const sessionError = new Error("Session expired");
+        sessionError.handled = true;
+        throw sessionError;
+    }
+
+    return response.json().then(function (data) {
+        if (!response.ok || (data && data.success === false)) {
+            throw new Error((data && data.error) || "Request failed");
+        }
+        return data;
+    });
+}
+
 let allItems = []; // cache of the last /items fetch, used for count/sort/detail lookups
 
 // ---------- TAB SWITCHING ----------
@@ -125,14 +151,15 @@ document.getElementById("foundForm").addEventListener("submit", function (event)
 // ---------- BROWSE / SEARCH / SORT / COUNT ----------
 function loadItems() {
     fetch(`${API_BASE}/items`)
-        .then(function (response) { return response.json(); })
+        .then(handleApiResponse)
         .then(function (items) {
             allItems = items;
             applyFilters();
         })
         .catch(function (error) {
+            if (error.handled) return; // already alerted + redirected
             console.error("Error loading items:", error);
-            alert("Couldn't reach the server. Please check your connection and try again.");
+            alert(error.message || "Couldn't reach the server. Please check your connection and try again.");
         });
 }
 
@@ -306,11 +333,12 @@ document.getElementById("submitClaimBtn").addEventListener("click", function () 
 // ---------- MY CLAIMS ----------
 function loadMyClaims() {
     fetch(`${API_BASE}/claims/me`, { headers: authHeaders() })
-        .then(function (response) { return response.json(); })
+        .then(handleApiResponse)
         .then(function (claims) { renderClaims(claims); })
         .catch(function (error) {
+            if (error.handled) return; // already alerted + redirected
             console.error("Error loading claims:", error);
-            alert("Couldn't reach the server. Please check your connection and try again.");
+            alert(error.message || "Couldn't reach the server. Please check your connection and try again.");
         });
 }
 
