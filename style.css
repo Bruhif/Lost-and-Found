@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap');
+
 :root {
     --brand: #b30000;
     --brand-dark: #800000;
@@ -10,31 +12,48 @@
     --shadow-sm: 0 1px 3px rgba(179, 0, 0, 0.08);
     --shadow-md: 0 4px 14px rgba(179, 0, 0, 0.12);
     --shadow-lift: 0 8px 20px rgba(179, 0, 0, 0.16);
+    --font-display: 'Poppins', 'Segoe UI', sans-serif;
+    --font-body: 'Inter', 'Segoe UI', sans-serif;
+}
+
+* {
+    box-sizing: border-box;
 }
 
 body {
-    font-family: Arial, sans-serif;
+    font-family: var(--font-body);
     max-width: 400px;
-    margin: 60px auto;
+    min-height: 100vh;
+    margin: 0 auto;
+    padding: 32px 20px;
     background-color: #ffffff;
     color: var(--brand);
     text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    line-height: 1.5;
 }
 
 h1 {
+    font-family: var(--font-display);
     color: var(--brand);
     margin-bottom: 4px;
     letter-spacing: -0.02em;
 }
 
 h2 {
+    font-family: var(--font-display);
     color: var(--brand);
     margin-top: 0;
     margin-bottom: 20px;
+    font-size: 1.15em;
 }
 
 form {
     text-align: left;
+    width: 100%;
 }
 
 input,
@@ -48,6 +67,8 @@ select {
     border-radius: var(--radius-md);
     color: var(--text);
     background-color: var(--bg-soft);
+    font-family: var(--font-body);
+    font-size: 0.95em;
     transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
 }
 
@@ -68,7 +89,8 @@ button {
     color: #ffffff;
     border: none;
     border-radius: var(--radius-md);
-    font-weight: bold;
+    font-family: var(--font-body);
+    font-weight: 600;
     cursor: pointer;
     box-shadow: var(--shadow-sm);
     transition: background-color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
@@ -96,7 +118,8 @@ a:hover {
 
 #result {
     color: var(--brand);
-    font-weight: bold;
+    font-weight: 600;
+    margin-top: 12px;
 }
 
 .conditional {
@@ -107,9 +130,43 @@ a:hover {
     display: block;
 }
 
+/* Secondary call-to-action box, e.g. "haven't registered yet?" on the
+   login page — visually distinct from the primary button, using the
+   darker brand shade so it reads as "a different action" rather than
+   competing with Log In for attention. */
+.secondary-action {
+    width: 100%;
+    margin-top: 18px;
+    background-color: var(--brand-dark);
+    border-radius: var(--radius-md);
+    padding: 14px 18px;
+    box-shadow: var(--shadow-sm);
+    transition: background-color 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+}
+
+.secondary-action:hover {
+    background-color: #660000;
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}
+
+.secondary-action a {
+    display: block;
+    color: #ffffff;
+    font-weight: 600;
+    font-size: 0.95em;
+}
+
+.secondary-action a:hover {
+    text-decoration: none;
+}
 
 .dashboard-body {
     max-width: 900px;
+    min-height: auto;
+    display: block;
+    padding: 32px 24px;
+    text-align: left;
 }
 
 .auth-card {
@@ -119,6 +176,7 @@ a:hover {
     box-shadow: var(--shadow-md);
     padding: 32px 28px;
     margin-top: 12px;
+    width: 100%;
 }
 
 .auth-card h1 {
@@ -143,7 +201,8 @@ a:hover {
     border: none;
     padding: 10px 18px;
     color: var(--brand);
-    font-weight: bold;
+    font-family: var(--font-body);
+    font-weight: 600;
     cursor: pointer;
     width: auto;
     margin: 0;
@@ -172,7 +231,7 @@ a:hover {
 
 .stats-bar {
     margin-bottom: 14px;
-    font-weight: bold;
+    font-weight: 600;
     color: var(--brand);
     background-color: var(--bg-soft);
     padding: 10px 14px;
@@ -259,6 +318,7 @@ a:hover {
 }
 
 .item-card h4 {
+    font-family: var(--font-display);
     margin: 4px 0;
     color: var(--brand);
 }
@@ -274,7 +334,7 @@ a:hover {
     padding: 3px 10px;
     border-radius: 999px;
     font-size: 0.75em;
-    font-weight: bold;
+    font-weight: 600;
     background-color: var(--brand);
     color: #fff;
     margin-bottom: 6px;
@@ -295,7 +355,7 @@ textarea {
     border-radius: var(--radius-md);
     color: var(--text);
     background-color: var(--bg-soft);
-    font-family: inherit;
+    font-family: var(--font-body);
     min-height: 70px;
     transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
 }
