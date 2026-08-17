@@ -1,54 +1,55 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>Student Registration</title>
-<link rel="stylesheet" href="../../style.css">
-</head>
-<body>
+    <head>
+        <meta charset="UTF-8">
+        <title>Student Registration</title>
+        <link rel="stylesheet" href="../../style.css">
+    </head>
+    <body>
 
-<h2>Student Registration Form</h2>
+    <h2>Student Registration Form</h2>
 
-<form id="registerForm">
-    <input type="text" id="name" placeholder="Username" required>
-    <input type="email" id="email" placeholder="Email" required>
-    <input type="password" id="password" placeholder="Password" required>
-    <input type="text" id="phone" placeholder="Phone Number" required>
+    <form id="registerForm">
+        <input type="text" id="name" placeholder="Username" required>
+        <input type="email" id="email" placeholder="Email" required>
+        <input type="password" id="password" placeholder="Password" required>
+        <input type="text" id="phone" placeholder="Phone Number" required>
 
-    <select name="department" id="department" required>
-        <option value="">Select Department</option>
-        <option value="Information Technology">Information Technology</option>
-        <option value="Accounting">Accounting</option>
-        <option value="Management">Management</option>
-        <option value="Psychology">Psychology</option>
-    </select>
+        <select name="department" id="department" required>
+            <option value="">Select Department</option>
+            <option value="Information Technology">Information Technology</option>
+            <option value="Accounting">Accounting</option>
+            <option value="Management">Management</option>
+            <option value="Psychology">Psychology</option>
+        </select>
 
-    <select name="Year" id="year" required>
-        <option value="">Select Year</option>
-        <option value="1">1st Year</option>
-        <option value="2">2nd Year</option>
-        <option value="3">3rd Year</option>
-        <option value="4">4th Year</option>
-    </select>
+        <select name="Year" id="year" required>
+            <option value="">Select Year</option>
+            <option value="1">1st Year</option>
+            <option value="2">2nd Year</option>
+            <option value="3">3rd Year</option>
+            <option value="4">4th Year</option>
+        </select>
 
-    <button type="submit">Submit</button>
-</form>
+        <button type="submit">Submit</button>
+    </form>
 
-<div id="verificationSection" style="display: none;">
-    <h3>Verify your email</h3>
-    <p>Enter the 6 digit verification code sent to your email.</p>
-    <input
-        type="text"
-        id="verificationCode"
-        placeholder="Enter verification code"
-        maxlength="6"
-        required>
-    <br><br>
-    <button type="button" onclick="verifyEmail()">
-        Verify Email
-    </button>
-</div>
+    <div id="verificationSection" style="display: none;">
+        <h3>Verify your email</h3>
+        <p>Enter the 6 digit verification code sent to your email.</p>
 
-<script src="scripts.js"></script>
-</body>
+        <input 
+            type="text" 
+            id="verificationCode" 
+            placeholder="Enter verification code"
+            maxlength="6"
+            required>
+        <br><br>
+        <button type="button" onclick="verifyEmail()">
+            Verify Email
+        </button>
+    </div>
+
+    <script src="scripts.js"></script>
+    </body>
 </html>
