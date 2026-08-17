@@ -309,6 +309,7 @@ document.getElementById("submitClaimBtn").addEventListener("click", function () 
 
     const claimData = {
         itemid: document.getElementById("claimItemID").value,
+        verificationnotes: document.getElementById("claimNotes").value,
         claimdate: new Date().toISOString().split("T")[0],
         claimstatus: "Pending"
     };
@@ -358,6 +359,7 @@ function renderClaims(claims) {
             <span class="status-badge">${claim.claimstatus}</span>
             <h4>Item #${claim.itemid}</h4>
             <p>Claimed on: ${claim.claimdate}</p>
+            <p>${claim.verificationnotes || ''}</p>
         `;
         container.appendChild(card);
     });

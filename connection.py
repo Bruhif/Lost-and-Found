@@ -828,6 +828,7 @@ def add_claim():
 
     itemid = data.get("itemid")
     claimuserid = g.user_id  # from the verified token, not the request body
+    verificationnotes = data.get("verificationnotes")
     claimdate = data.get("claimdate")
     claimstatus = data.get("claimstatus", "Pending")
 
@@ -837,11 +838,11 @@ def add_claim():
     try:
         with db_cursor() as (conn, cursor):
             query = """
-                INSERT INTO claims (itemid, claimuserid, claimdate, claimstatus)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO claims (itemid, claimuserid, verificationnotes, claimdate, claimstatus)
+                VALUES (%s, %s, %s, %s, %s)
                 RETURNING claimid;
             """
-            cursor.execute(query, (itemid, claimuserid, claimdate, claimstatus))
+            cursor.execute(query, (itemid, claimuserid, verificationnotes, claimdate, claimstatus))
             claim_id = cursor.fetchone()[0]
 
         return jsonify({
@@ -860,7 +861,7 @@ def get_user_claims():
         with db_cursor() as (conn, cursor):
             cursor.execute(
                 """
-                SELECT claimid, itemid, claimuserid, claimdate, claimstatus
+                SELECT claimid, itemid, claimuserid, verificationnotes, claimdate, claimstatus
                 FROM claims
                 WHERE claimuserid = %s
                 ORDER BY claimdate DESC;
@@ -872,7 +873,8 @@ def get_user_claims():
         return jsonify([
             {
                 "claimid": r[0], "itemid": r[1], "claimuserid": r[2],
-                "claimdate": r[3].isoformat() if r[3] else None, "claimstatus": r[4]
+                "verificationnotes": r[3],
+                "claimdate": r[4].isoformat() if r[4] else None, "claimstatus": r[5]
             }
             for r in rows
         ])
@@ -887,7 +889,7 @@ def get_pending_claims():
         with db_cursor() as (conn, cursor):
             cursor.execute(
                 """
-                SELECT claimid, itemid, claimuserid, claimdate, claimstatus
+                SELECT claimid, itemid, claimuserid, verificationnotes, claimdate, claimstatus
                 FROM claims
                 WHERE claimstatus = 'Pending'
                 ORDER BY claimdate ASC;
@@ -898,7 +900,8 @@ def get_pending_claims():
         return jsonify([
             {
                 "claimid": r[0], "itemid": r[1], "claimuserid": r[2],
-                "claimdate": r[3].isoformat() if r[3] else None, "claimstatus": r[4]
+                "verificationnotes": r[3],
+                "claimdate": r[4].isoformat() if r[4] else None, "claimstatus": r[5]
             }
             for r in rows
         ])
