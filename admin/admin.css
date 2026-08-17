@@ -1,0 +1,23 @@
+.claim-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.claim-actions button {
+    width: auto;
+    flex: 1;
+    margin-top: 0;
+}
+
+.approve-btn {
+    background-color: #2e7d32;
+}
+
+.approve-btn:hover {
+    background-color: #1b5e20;
+}
+
+.reject-btn {
+    background-color: #b30000;
+}
