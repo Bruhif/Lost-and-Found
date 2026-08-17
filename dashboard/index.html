@@ -1,70 +1,71 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Dashboard</title>
-<link rel="stylesheet" href="../style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="../style.css">
 </head>
 <body class="dashboard-body">
 
-<h1>Lost and Found Dashboard</h1>
+    <h1>Lost and Found Dashboard</h1>
 
-<nav class="tabs">
-    <button class="tab-btn active" data-tab="browse">Browse Items</button>
-    <button class="tab-btn" data-tab="reportLost">Report Lost</button>
-    <button class="tab-btn" data-tab="reportFound">Report Found</button>
-    <button class="tab-btn" data-tab="myClaims">My Claims</button>
-</nav>
+    <nav class="tabs">
+        <button class="tab-btn active" data-tab="browse">Browse Items</button>
+        <button class="tab-btn" data-tab="reportLost">Report Lost</button>
+        <button class="tab-btn" data-tab="reportFound">Report Found</button>
+        <button class="tab-btn" data-tab="myClaims">My Claims</button>
+    </nav>
 
-<!-- BROWSE / SEARCH -->
-<section id="browse" class="tab-section active">
-    <div id="itemCount" class="stats-bar"></div>
-    <div class="filter-bar">
-        <input type="text" id="searchInput" placeholder="Search category...">
-        <select id="statusFilter">
-            <option value="">All Statuses</option>
-            <option value="Lost">Lost</option>
-            <option value="Found">Found</option>
-        </select>
-        <select id="sortFilter">
-            <option value="newest">Newest First</option>
-            <option value="oldest">Oldest First</option>
-        </select>
-        <button type="button" id="searchBtn">Search</button>
-    </div>
-    <div id="itemList" class="item-grid"></div>
-</section>
+    <!-- BROWSE / SEARCH -->
+    <section id="browse" class="tab-section active">
+        <div id="itemCount" class="stats-bar"></div>
+        <div class="filter-bar">
+            <input type="text" id="searchInput" placeholder="Search category...">
+            <select id="statusFilter">
+                <option value="">All Statuses</option>
+                <option value="Lost">Lost</option>
+                <option value="Found">Found</option>
+            </select>
+            <select id="sortFilter">
+                <option value="newest">Newest First</option>
+                <option value="oldest">Oldest First</option>
+            </select>
+            <button type="button" id="searchBtn">Search</button>
+        </div>
+        <div id="itemList" class="item-grid"></div>
+    </section>
 
-<!-- REPORT LOST -->
-<section id="reportLost" class="tab-section">
-    <h2>Report a Lost Item</h2>
-    <form id="lostForm">
-        <input type="text" id="lostItemCategory" placeholder="Category" required>
-        <input type="date" id="lostDate" required>
-        <p class="field-error" id="lostDateError"></p>
-        <input type="file" id="lostImage" accept="image/*">
-        <button type="submit">Submit Report</button>
-    </form>
-</section>
+    <!-- REPORT LOST -->
+    <section id="reportLost" class="tab-section">
+        <h2>Report a Lost Item</h2>
+        <form id="lostForm">
+            <input type="text" id="lostItemCategory" placeholder="Category" required>
+            <input type="date" id="lostDate" required>
+            <p class="field-error" id="lostDateError"></p>
+            <input type="file" id="lostImage" accept="image/*">
+            <button type="submit">Submit Report</button>
+        </form>
+    </section>
 
-<!-- REPORT FOUND -->
-<section id="reportFound" class="tab-section">
-    <h2>Report a Found Item</h2>
-    <form id="foundForm">
-        <input type="text" id="foundItemCategory" placeholder="Category" required>
-        <input type="text" id="foundLocation" placeholder="Location Found" required>
-        <input type="date" id="foundDate" required>
-        <p class="field-error" id="foundDateError"></p>
-        <input type="file" id="foundImage" accept="image/*">
-        <button type="submit">Submit Report</button>
-    </form>
-</section>
+    <!-- REPORT FOUND -->
+    <section id="reportFound" class="tab-section">
+        <h2>Report a Found Item</h2>
+        <form id="foundForm">
+            <input type="text" id="foundItemCategory" placeholder="Category" required>
+            <input type="text" id="foundLocation" placeholder="Location Found" required>
+            <input type="date" id="foundDate" required>
+            <p class="field-error" id="foundDateError"></p>
+            <input type="file" id="foundImage" accept="image/*">
+            <button type="submit">Submit Report</button>
+        </form>
+    </section>
 
-<!-- MY CLAIMS -->
-<section id="myClaims" class="tab-section">
-    <h2>My Claims</h2>
-    <div id="claimList" class="item-grid"></div>
-</section>
+    <!-- MY CLAIMS -->
+    <section id="myClaims" class="tab-section">
+        <h2>My Claims</h2>
+        <div id="claimList" class="item-grid"></div>
+    </section>
 
 <!-- CLAIM MODAL -->
 <div id="claimModal" class="modal hidden">
@@ -77,20 +78,20 @@
     </div>
 </div>
 
-<!-- ITEM DETAIL MODAL -->
-<div id="detailModal" class="modal hidden">
-    <div class="modal-content">
-        <img id="detailImage" src="" alt="" onerror="this.style.display='none'">
-        <span class="status-badge" id="detailStatus"></span>
-        <h3 id="detailCategory"></h3>
-        <p id="detailLocation"></p>
-        <p id="detailDate"></p>
-        <p id="detailReportedBy"></p>
-        <div id="detailOwnerActions"></div>
-        <button type="button" id="closeDetailBtn">Close</button>
+    <!-- ITEM DETAIL MODAL -->
+    <div id="detailModal" class="modal hidden">
+        <div class="modal-content">
+            <img id="detailImage" src="" alt="" onerror="this.style.display='none'">
+            <span class="status-badge" id="detailStatus"></span>
+            <h3 id="detailCategory"></h3>
+            <p id="detailLocation"></p>
+            <p id="detailDate"></p>
+            <p id="detailReportedBy"></p>
+            <div id="detailOwnerActions"></div>
+            <button type="button" id="closeDetailBtn">Close</button>
+        </div>
     </div>
-</div>
 
-<script src="scripts.js" defer></script>
+    <script src="scripts.js" defer></script>
 </body>
 </html>
