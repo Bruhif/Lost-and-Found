@@ -729,6 +729,7 @@ def add_lost():
     category = request.form.get("category")
     status = request.form.get("status", "Lost")
     date = request.form.get("date")
+    location = request.form.get("location") or None  # optional — the person may not know
     reportedbyuserid = g.user_id  # from the verified token, not the form body
 
     if not category or not status or not date:
@@ -739,11 +740,11 @@ def add_lost():
 
         with db_cursor() as (conn, cursor):
             query = """
-                INSERT INTO itemlist (category, status, date, image, reportedbyuserid)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO itemlist (category, status, date, image, location, reportedbyuserid)
+                VALUES (%s, %s, %s, %s, %s, %s)
                 RETURNING itemid;
             """
-            values = (category, status, date, image_path, reportedbyuserid)
+            values = (category, status, date, image_path, location, reportedbyuserid)
             cursor.execute(query, values)
             item_id = cursor.fetchone()[0]
 

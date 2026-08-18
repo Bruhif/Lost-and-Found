@@ -111,6 +111,7 @@ document.getElementById("lostForm").addEventListener("submit", function (event) 
     formData.append("category", itemCategory);
     formData.append("status", "Lost");
     formData.append("date", lostDate);
+    formData.append("location", document.getElementById("lostLocation").value);
 
     const imageFile = document.getElementById("lostImage").files[0];
     if (imageFile) formData.append("image", imageFile);
@@ -227,7 +228,7 @@ function renderItems(items) {
                  onerror="this.style.display='none'">
             <span class="status-badge">${item.status}</span>
             <h4>${item.category}</h4>
-            ${item.location ? `<p>Found at: ${item.location}</p>` : ''}
+            ${item.location ? `<p>${item.status === 'Lost' ? 'Last seen near' : 'Found at'}: ${item.location}</p>` : ''}
             <p>${item.date ? new Date(item.date).toLocaleDateString() : ''}</p>
         `;
 
@@ -261,7 +262,9 @@ function openDetailModal(item) {
     document.getElementById("detailImage").src = item.image || "";
     document.getElementById("detailStatus").textContent = item.status;
     document.getElementById("detailCategory").textContent = item.category;
-    document.getElementById("detailLocation").textContent = item.location ? `Location: ${item.location}` : "";
+    document.getElementById("detailLocation").textContent = item.location
+        ? `${item.status === 'Lost' ? 'Last seen near' : 'Found at'}: ${item.location}`
+        : "";
     document.getElementById("detailDate").textContent = item.date ? `Date: ${new Date(item.date).toLocaleDateString()}` : "";
     document.getElementById("detailReportedBy").textContent = `Reported by user #${item.reportedByUserID || ""}`;
 
