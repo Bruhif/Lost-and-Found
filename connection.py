@@ -26,7 +26,7 @@ DB_CONFIG = {
     "port": 5432,
     "database": "lnf",
     "user": "teentin",
-    "password": "1712"
+    "password": os.getenv("DB_PASSWORD")
 }
 
 # Secret used to sign session tokens. Preferred: set the JWT_SECRET
