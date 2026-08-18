@@ -79,6 +79,23 @@ function validateNotFutureDate(dateValue, errorElementId) {
     return true;
 }
 
+// Default the lost/found date pickers to today so most people never have
+// to touch them, but leave them fully editable — e.g. for someone
+// reporting an item they actually found a few days ago. Also cap the
+// native picker at today via `max`, which reinforces the same "no future
+// dates" rule validateNotFutureDate() already checks on submit.
+(function setDefaultDates() {
+    const todayStr = new Date().toISOString().split("T")[0];
+
+    const lostDateInput = document.getElementById("lostDate");
+    lostDateInput.value = todayStr;
+    lostDateInput.max = todayStr;
+
+    const foundDateInput = document.getElementById("foundDate");
+    foundDateInput.value = todayStr;
+    foundDateInput.max = todayStr;
+})();
+
 // ---------- REPORT LOST ITEM (with optional image) ----------
 document.getElementById("lostForm").addEventListener("submit", function (event) {
     event.preventDefault();
@@ -107,6 +124,7 @@ document.getElementById("lostForm").addEventListener("submit", function (event) 
     .then(function (data) {
         alert(data.message || data.error);
         document.getElementById("lostForm").reset();
+        document.getElementById("lostDate").value = new Date().toISOString().split("T")[0];
     })
     .catch(function (error) {
         console.error("Error reporting lost item:", error);
@@ -141,6 +159,7 @@ document.getElementById("foundForm").addEventListener("submit", function (event)
     .then(function (data) {
         alert(data.message || data.error);
         document.getElementById("foundForm").reset();
+        document.getElementById("foundDate").value = new Date().toISOString().split("T")[0];
     })
     .catch(function (error) {
         console.error("Error reporting found item:", error);

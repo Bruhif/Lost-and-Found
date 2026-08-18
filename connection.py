@@ -955,6 +955,30 @@ def _review_claim(claim_id, new_status):
 
             itemid, claimant_email, category = row
 
+            competing_emails = []
+            if new_status == "Approved":
+                # Auto-reject every other still-pending claim on this same
+                # item — that's the whole point of letting multiple people
+                # claim it: the admin picks the real owner and everyone
+                # else's claim resolves automatically instead of sitting in
+                # limbo forever. Collect their emails while we still have
+                # the join available, so we can notify them too.
+                cursor.execute(
+                    """
+                    SELECT u.email
+                    FROM claims c
+                    JOIN users u ON c.claimuserid = u.userid
+                    WHERE c.itemid = %s AND c.claimid != %s AND c.claimstatus = 'Pending';
+                    """,
+                    (itemid, claim_id)
+                )
+                competing_emails = [r[0] for r in cursor.fetchall()]
+
+                cursor.execute(
+                    "UPDATE claims SET claimstatus = 'Rejected' WHERE itemid = %s AND claimid != %s AND claimstatus = 'Pending';",
+                    (itemid, claim_id)
+                )
+
             cursor.execute(
                 "UPDATE claims SET claimstatus = %s, verifiedby = %s WHERE claimid = %s;",
                 (new_status, verifiedby, claim_id)
@@ -967,6 +991,8 @@ def _review_claim(claim_id, new_status):
                 cursor.execute("UPDATE itemlist SET status = %s WHERE itemid = %s;", ("Found", itemid))
 
         send_claim_notification(claimant_email, new_status == "Approved", category)
+        for competitor_email in competing_emails:
+            send_claim_notification(competitor_email, False, category)
 
         return jsonify({"success": True, "message": f"Claim {new_status.lower()}."})
 

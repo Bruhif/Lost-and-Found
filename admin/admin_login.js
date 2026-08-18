@@ -19,7 +19,7 @@ document.getElementById("adminLoginForm").addEventListener("submit", function (e
         if (data.success) {
             localStorage.setItem("adminID", data.admin.id);
             localStorage.setItem("adminToken", data.token);
-            window.location.href = "../dashboard/admin.html"; // adjust path to match your project structure
+            window.location.href = "admin.html"; // adjust path to match your project structure
         } else {
             errorEl.textContent = data.error || "Login failed. Please try again.";
         }
