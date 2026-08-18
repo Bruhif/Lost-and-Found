@@ -358,6 +358,15 @@ def login():
             cursor.execute(query, (username,))
             user = cursor.fetchone()
 
+            admin_query = """
+                SELECT adminid, adminname, adminnumber, password, adminemail
+                FROM admin
+                WHERE adminname = %s;
+            """
+
+            cursor.execute(admin_query, (username,))
+            admin = cursor.fetchone()
+
         if user:
             if check_password_hash(user[4], password):
                 token = generate_token({
@@ -373,6 +382,25 @@ def login():
                         "name": user[1],
                         "email": user[2],
                         "usertype": user[3]
+                    }
+                })
+            else:
+                return jsonify({"success": False, "error": "Invalid credentials"}), 401
+        elif admin:
+            if check_password_hash(admin[3], password):
+                token = generate_token({
+                    "admin_id": admin[0],
+                    "role": "admin"
+                })
+                return jsonify({
+                    "success": True,
+                    "token": token,
+                    "admin": {
+                        "id": admin[0],
+                        "name": admin[1],
+                        "number": admin[2],
+                        "email": admin[4],
+                        "usertype": "admin"
                     }
                 })
             else:
