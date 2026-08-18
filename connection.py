@@ -1,6 +1,7 @@
 import smtplib
 from email.message import EmailMessage
 import os
+from dotenv import load_dotenv
 
 import secrets
 from datetime import datetime, timedelta
@@ -18,15 +19,19 @@ import psycopg2
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 
+load_dotenv()
+
 app = Flask(__name__)
 CORS(app)
+
+DB_PASSWORD = os.getenv("DB_PASSWORD")
 
 DB_CONFIG = {
     "host": "100.121.226.108",
     "port": 5432,
     "database": "lnf",
     "user": "teentin",
-    "password": os.getenv("DB_PASSWORD")
+    "password": DB_PASSWORD
 }
 
 # Secret used to sign session tokens. Preferred: set the JWT_SECRET
