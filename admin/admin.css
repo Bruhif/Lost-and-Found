@@ -40,3 +40,9 @@
     margin-bottom: 8px;
     display: block;
 }
+
+.item-id-tag {
+    font-size: 0.7em;
+    font-weight: 500;
+    color: #999999;
+}

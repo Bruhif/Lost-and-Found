@@ -184,7 +184,7 @@ function renderAllItems(items) {
         card.innerHTML = `
             <img src="${item.image || ''}" alt="${item.category}" onerror="this.style.display='none'">
             <span class="status-badge">${item.status}</span>
-            <h4>${item.category}</h4>
+            <h4>${item.category} <span class="item-id-tag">#${item.itemID}</span></h4>
             ${item.location ? `<p>Location: ${item.location}</p>` : ''}
             <p>${item.date ? new Date(item.date).toLocaleDateString() : ''}</p>
             <p>Reported by user #${item.reportedByUserID || ''}</p>
