@@ -643,10 +643,19 @@ def add_community():
 def get_items():
     try:
         with db_cursor() as (conn, cursor):
+            # Once an item has an approved claim, it's resolved — hide it
+            # from the active listing instead of leaving it cluttering
+            # Browse/All Reports forever. (The claimant still sees it via
+            # their own /claims/me — this only affects the items list.)
             cursor.execute(
                 """
                 SELECT itemid, category, status, image, location, date, reportedbyuserid
-                FROM itemlist order by date desc;
+                FROM itemlist i
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM claims c
+                    WHERE c.itemid = i.itemid AND c.claimstatus = 'Approved'
+                )
+                ORDER BY date DESC;
                 """
             )
             rows = cursor.fetchall()
