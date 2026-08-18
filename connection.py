@@ -25,17 +25,12 @@ app = Flask(__name__)
 CORS(app)
 
 DB_PASSWORD = os.getenv("DB_PASSWORD")
-DB_HOST = os.getenv("DB_HOST")
-DB_PORT = os.getenv("DB_PORT")
-DB_NAME = os.getenv("DB_NAME")
-DB_USER = os.getenv("DB_USER")
-
 
 DB_CONFIG = {
-    "host": DB_HOST,
-    "port": DB_PORT,
-    "database": DB_NAME,
-    "user": DB_USER,
+    "host": "100.121.226.108",
+    "port": 5432,
+    "database": "lnf",
+    "user": "teentin",
     "password": DB_PASSWORD
 }
 
@@ -659,13 +654,14 @@ def get_items():
             # their own /claims/me — this only affects the items list.)
             cursor.execute(
                 """
-                SELECT itemid, category, status, image, location, date, reportedbyuserid
+                SELECT i.itemid, i.category, i.status, i.image, i.location, i.date, i.reportedbyuserid, u.username
                 FROM itemlist i
+                LEFT JOIN users u ON i.reportedbyuserid = u.userid
                 WHERE NOT EXISTS (
                     SELECT 1 FROM claims c
                     WHERE c.itemid = i.itemid AND c.claimstatus = 'Approved'
                 )
-                ORDER BY date DESC;
+                ORDER BY i.date DESC;
                 """
             )
             rows = cursor.fetchall()
@@ -678,7 +674,8 @@ def get_items():
                 "image": row[3],
                 "location": row[4],
                 "date": row[5].isoformat() if row[5] else None,
-                "reportedByUserID": row[6]
+                "reportedByUserID": row[6],
+                "reportedByUsername": row[7]
             }
             for row in rows
         ])

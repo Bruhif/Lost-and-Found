@@ -266,7 +266,8 @@ function openDetailModal(item) {
         ? `${item.status === 'Lost' ? 'Last seen near' : 'Found at'}: ${item.location}`
         : "";
     document.getElementById("detailDate").textContent = item.date ? `Date: ${new Date(item.date).toLocaleDateString()}` : "";
-    document.getElementById("detailReportedBy").textContent = `Reported by user #${item.reportedByUserID || ""}`;
+    document.getElementById("detailReportedBy").textContent =
+        `Reported by ${item.reportedByUsername ? item.reportedByUsername + " " : ""}(user #${item.reportedByUserID || ""})`;
 
     const ownerActions = document.getElementById("detailOwnerActions");
     ownerActions.innerHTML = "";

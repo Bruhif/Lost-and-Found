@@ -187,7 +187,7 @@ function renderAllItems(items) {
             <h4>${item.category} <span class="item-id-tag">#${item.itemID}</span></h4>
             ${item.location ? `<p>Location: ${item.location}</p>` : ''}
             <p>${item.date ? new Date(item.date).toLocaleDateString() : ''}</p>
-            <p>Reported by user #${item.reportedByUserID || ''}</p>
+            <p>Reported by ${item.reportedByUsername ? item.reportedByUsername : ''} (user #${item.reportedByUserID || ''})</p>
         `;
         container.appendChild(card);
     });
