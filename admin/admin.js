@@ -85,17 +85,22 @@ function renderClaimQueue(claims) {
 
     Object.keys(byItem).forEach(function (itemid) {
         const itemClaims = byItem[itemid];
+        const itemImage = itemClaims[0].itemImage;
+        const itemCategory = itemClaims[0].itemCategory;
 
         const group = document.createElement("div");
         group.className = "claim-group";
-        group.innerHTML = `<h4>Item #${itemid}${itemClaims.length > 1 ? ` — ${itemClaims.length} competing claims` : ''}</h4>`;
+        group.innerHTML = `
+            ${itemImage ? `<img src="${itemImage}" alt="${itemCategory || ''}" class="claim-group-image" onerror="this.style.display='none'">` : ''}
+            <h4>Item #${itemid}${itemCategory ? ` — ${itemCategory}` : ''}${itemClaims.length > 1 ? ` — ${itemClaims.length} competing claims` : ''}</h4>
+        `;
 
         itemClaims.forEach(function (claim) {
             const card = document.createElement("div");
             card.className = "item-card";
             card.innerHTML = `
                 <span class="status-badge">${claim.claimstatus}</span>
-                <p>Claimed by user #${claim.claimuserid}</p>
+                <p>Claimed by ${claim.claimantUsername ? claim.claimantUsername : ''} (user #${claim.claimuserid})</p>
                 <p>Date: ${claim.claimdate}</p>
                 <p>${claim.verificationnotes || 'No description provided'}</p>
             `;

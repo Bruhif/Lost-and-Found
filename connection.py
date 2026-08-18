@@ -904,10 +904,13 @@ def get_pending_claims():
         with db_cursor() as (conn, cursor):
             cursor.execute(
                 """
-                SELECT claimid, itemid, claimuserid, verificationnotes, claimdate, claimstatus
-                FROM claims
-                WHERE claimstatus = 'Pending'
-                ORDER BY claimdate ASC;
+                SELECT c.claimid, c.itemid, c.claimuserid, c.verificationnotes, c.claimdate, c.claimstatus,
+                       i.image, i.category, u.username
+                FROM claims c
+                JOIN itemlist i ON c.itemid = i.itemid
+                JOIN users u ON c.claimuserid = u.userid
+                WHERE c.claimstatus = 'Pending'
+                ORDER BY c.claimdate ASC;
                 """
             )
             rows = cursor.fetchall()
@@ -916,7 +919,8 @@ def get_pending_claims():
             {
                 "claimid": r[0], "itemid": r[1], "claimuserid": r[2],
                 "verificationnotes": r[3],
-                "claimdate": r[4].isoformat() if r[4] else None, "claimstatus": r[5]
+                "claimdate": r[4].isoformat() if r[4] else None, "claimstatus": r[5],
+                "itemImage": r[6], "itemCategory": r[7], "claimantUsername": r[8]
             }
             for r in rows
         ])
