@@ -1,2 +1,6 @@
+<<<<<<< HEAD
 *.jwt_secret
+=======
+*.jwt_secret
+>>>>>>> b51202b5373fba3dc5efc79e7607611b2b1d733b
 .jwt_secret
