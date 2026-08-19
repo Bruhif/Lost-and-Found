@@ -14,45 +14,31 @@ document.getElementById("loginForm").addEventListener("submit", function(event) 
         body: JSON.stringify({ username, password })
     })
     .then(function (response) {
+        // Rate limiting returns 429 with a JSON body — still parse it below
+        // rather than treating it as a hard network failure, so the real
+        // "please wait a minute" message actually reaches the user.
         return response.json();
     })
     .then(function (data) {
-        if (data.success) {
+        if (!data.success) {
+            alert(data.error || "Invalid username or password.");
+            return;
+        }
+
+        // /login returns either a "user" or an "admin" object depending on
+        // which table matched — route based on whichever one is present.
+        if (data.user) {
             localStorage.setItem("userID", data.user.id);
             localStorage.setItem("usertype", data.user.usertype);
             localStorage.setItem("token", data.token);
             alert("Login successful!");
             window.location.href = "../dashboard/";
-            return;
+        } else if (data.admin) {
+            localStorage.setItem("adminID", data.admin.id);
+            localStorage.setItem("adminToken", data.token);
+            alert("Admin login successful!");
+            window.location.href = "../admin/";
         }
-
-        fetch(`${API_BASE}/admin/login`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                email: username,
-                password: password
-            })
-        })
-        .then(function (adminResponse) {
-            return adminResponse.json();
-        })
-        .then(function (adminData) {
-            if (adminData.success) {
-                localStorage.setItem("adminID", adminData.admin.id);
-                localStorage.setItem("adminToken", adminData.token);
-                alert("Admin login successful!");
-                window.location.href = "../admin/";
-            } else {
-                alert(adminData.error || data.error || "Invalid username or password.");
-            }
-        })
-        .catch(function (error) {
-            console.error("Admin login error:", error);
-            alert("Unable to reach the admin login service.");
-        });
     })
     .catch(function (error) {
         console.error("Login error:", error);

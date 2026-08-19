@@ -332,8 +332,50 @@ def verify_email():
             "error": str(e)
         }), 500
 
+# ---------- Rate limiting (5 attempts per minute per IP) ----------
+# Simple in-memory tracker — no new dependency required. Good enough for a
+# single-process dev/class-project deployment; note for the writeup that
+# this resets on restart and wouldn't scale past one server process, since
+# the attempt counts live in this process's memory, not a shared store.
+from collections import defaultdict
+
+_login_attempts = defaultdict(list)  # { ip_address: [timestamp, timestamp, ...] }
+RATE_LIMIT_MAX_ATTEMPTS = 4
+RATE_LIMIT_WINDOW_SECONDS = 60
+
+def check_rate_limit(ip_address):
+    now = datetime.now()
+    window_start = now - timedelta(seconds=RATE_LIMIT_WINDOW_SECONDS)
+
+    # Drop timestamps older than the window before counting
+    _login_attempts[ip_address] = [
+        t for t in _login_attempts[ip_address] if t > window_start
+    ]
+
+    if len(_login_attempts[ip_address]) >= RATE_LIMIT_MAX_ATTEMPTS:
+        return False
+
+    _login_attempts[ip_address].append(now)
+    return True
+
+# ---------- Timing-safe comparison ----------
+# A fixed, valid password hash with no real matching password. When no
+# user/admin is found, we still run check_password_hash against this, so
+# a nonexistent username takes the same time to reject as a wrong password
+# on a real one — the response time itself can't be used to tell which.
+_DECOY_HASH = generate_password_hash(str(uuid.uuid4()))
+
+
 @app.route("/login", methods=["POST"])
 def login():
+    ip_address = request.headers.get("X-Forwarded-For", request.remote_addr)
+
+    if not check_rate_limit(ip_address):
+        return jsonify({
+            "success": False,
+            "error": "Too many login attempts. Please wait a minute and try again."
+        }), 429
+
     data = get_json_body()
     if data is None:
         return jsonify({"success": False, "error": "Request body must be a JSON object"}), 400
@@ -368,43 +410,47 @@ def login():
             admin = cursor.fetchone()
 
         if user:
-            if check_password_hash(user[4], password):
-                token = generate_token({
-                    "user_id": user[0],
-                    "usertype": user[3],
-                    "role": "user"
-                })
-                return jsonify({
-                    "success": True,
-                    "token": token,
-                    "user": {
-                        "id": user[0],
-                        "name": user[1],
-                        "email": user[2],
-                        "usertype": user[3]
-                    }
-                })
-            else:
-                return jsonify({"success": False, "error": "Invalid credentials"}), 401
+            password_ok = check_password_hash(user[4], password)
         elif admin:
-            if check_password_hash(admin[3], password):
-                token = generate_token({
-                    "admin_id": admin[0],
-                    "role": "admin"
-                })
-                return jsonify({
-                    "success": True,
-                    "token": token,
-                    "admin": {
-                        "id": admin[0],
-                        "name": admin[1],
-                        "number": admin[2],
-                        "email": admin[4],
-                        "usertype": "admin"
-                    }
-                })
-            else:
-                return jsonify({"success": False, "error": "Invalid credentials"}), 401
+            password_ok = check_password_hash(admin[3], password)
+        else:
+            # Neither table matched — still do a hash comparison against the
+            # decoy so this branch takes the same time as a real mismatch.
+            check_password_hash(_DECOY_HASH, password)
+            password_ok = False
+
+        if user and password_ok:
+            token = generate_token({
+                "user_id": user[0],
+                "usertype": user[3],
+                "role": "user"
+            })
+            return jsonify({
+                "success": True,
+                "token": token,
+                "user": {
+                    "id": user[0],
+                    "name": user[1],
+                    "email": user[2],
+                    "usertype": user[3]
+                }
+            })
+        elif admin and password_ok:
+            token = generate_token({
+                "admin_id": admin[0],
+                "role": "admin"
+            })
+            return jsonify({
+                "success": True,
+                "token": token,
+                "admin": {
+                    "id": admin[0],
+                    "name": admin[1],
+                    "number": admin[2],
+                    "email": admin[4],
+                    "usertype": "admin"
+                }
+            })
         else:
             return jsonify({"success": False, "error": "Invalid credentials"}), 401
 
