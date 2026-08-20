@@ -13,6 +13,21 @@ function authHeaders(extra) {
     return Object.assign({ "Authorization": `Bearer ${authToken}` }, extra || {});
 }
 
+// Shared by both the Pending Claims and All Reports contact-info rows.
+// Falls back to a manual prompt if the Clipboard API isn't available
+// (e.g. an insecure/non-HTTPS context some browsers restrict it on).
+function copyToClipboard(text, label) {
+    if (!text) return;
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text)
+            .then(function () { alert(`${label} copied to clipboard.`); })
+            .catch(function () { prompt(`Copy this ${label.toLowerCase()}:`, text); });
+    } else {
+        prompt(`Copy this ${label.toLowerCase()}:`, text);
+    }
+}
+
 // See scripts.js for why this exists: without it, an error response
 // (e.g. an expired token) gets handed straight to a render function that
 // expects an array, and silently displays as "nothing here" instead of
@@ -129,12 +144,23 @@ function renderClaimQueue(claims) {
             card.innerHTML = `
                 <span class="status-badge">${claim.claimstatus}</span>
                 <p>Claimed by ${claim.claimantUsername ? claim.claimantUsername : ''} (user #${claim.claimuserid})</p>
-                <p>Phone: ${phoneText}</p>
-                <p>Email: ${emailLink}</p>
+                <p class="contact-row">Phone: ${phoneText}
+                    ${claim.claimantPhone ? `<button type="button" class="copy-btn" data-copy="${claim.claimantPhone}" data-label="Phone">Copy</button>` : ''}
+                </p>
+                <p class="contact-row">Email: ${emailLink}
+                    ${claim.claimantEmail ? `<button type="button" class="copy-btn" data-copy="${claim.claimantEmail}" data-label="Email">Copy</button>` : ''}
+                </p>
                 <p>Date: ${claim.claimdate}</p>
                 <p>${claim.verificationnotes || 'No description provided'}</p>
                 ${claim.claimImage ? `<img src="${claim.claimImage}" alt="Claim evidence" class="claim-evidence-image clickable-image" onerror="this.style.display='none'">` : ''}
             `;
+
+            // Wire up every copy button rendered into this card
+            card.querySelectorAll(".copy-btn").forEach(function (btn) {
+                btn.addEventListener("click", function () {
+                    copyToClipboard(btn.dataset.copy, btn.dataset.label);
+                });
+            });
 
             // Wire up the click-to-enlarge on the claimant's evidence photo, if any
             const evidenceImgEl = card.querySelector(".claim-evidence-image");
@@ -235,9 +261,19 @@ function renderAllItems(items) {
             ${item.location ? `<p>Location: ${item.location}</p>` : ''}
             <p>${item.date ? new Date(item.date).toLocaleDateString() : ''}</p>
             <p>Reported by ${item.reportedByUsername ? item.reportedByUsername : ''} (user #${item.reportedByUserID || ''})</p>
-            <p>Phone: ${phoneText}</p>
-            <p>Email: ${emailLink}</p>
+            <p class="contact-row">Phone: ${phoneText}
+                ${item.reportedByPhone ? `<button type="button" class="copy-btn" data-copy="${item.reportedByPhone}" data-label="Phone">Copy</button>` : ''}
+            </p>
+            <p class="contact-row">Email: ${emailLink}
+                ${item.reportedByEmail ? `<button type="button" class="copy-btn" data-copy="${item.reportedByEmail}" data-label="Email">Copy</button>` : ''}
+            </p>
         `;
+
+        card.querySelectorAll(".copy-btn").forEach(function (btn) {
+            btn.addEventListener("click", function () {
+                copyToClipboard(btn.dataset.copy, btn.dataset.label);
+            });
+        });
 
         const imgEl = card.querySelector("img.clickable-image");
         if (imgEl && item.image) {

@@ -13,6 +13,17 @@ function authHeaders(extra) {
     return Object.assign({ "Authorization": `Bearer ${authToken}` }, extra || {});
 }
 
+// <input type="date"> only ever returns a date string (no time component at
+// all), so sending it straight to the backend always inserts 00:00:00. This
+// combines the user's picked date with the current time-of-day at submit,
+// so items reported the same day still get distinct, sortable timestamps.
+function dateWithCurrentTime(dateStr) {
+    const now = new Date();
+    const [year, month, day] = dateStr.split("-").map(Number);
+    const combined = new Date(year, month - 1, day, now.getHours(), now.getMinutes(), now.getSeconds());
+    return combined.toISOString();
+}
+
 // Every GET endpoint that feeds a render function expects an array back on
 // success. If the token is missing/expired, or something else goes wrong,
 // the server sends back {"success": false, "error": "..."} instead — an
@@ -110,7 +121,7 @@ document.getElementById("lostForm").addEventListener("submit", function (event) 
     const formData = new FormData();
     formData.append("category", itemCategory);
     formData.append("status", "Lost");
-    formData.append("date", lostDate);
+    formData.append("date", dateWithCurrentTime(lostDate));
     formData.append("location", document.getElementById("lostLocation").value);
 
     const imageFile = document.getElementById("lostImage").files[0];
@@ -145,7 +156,7 @@ document.getElementById("foundForm").addEventListener("submit", function (event)
     const formData = new FormData();
     formData.append("category", document.getElementById("foundItemCategory").value);
     formData.append("location", document.getElementById("foundLocation").value);
-    formData.append("date", foundDate);
+    formData.append("date", dateWithCurrentTime(foundDate));
     formData.append("status", "Found");
 
     const imageFile = document.getElementById("foundImage").files[0];
