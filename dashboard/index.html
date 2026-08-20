@@ -69,10 +69,19 @@
     </section>
 
 <!-- CLAIM MODAL -->
+<!-- Replace the existing #claimModal in dashboard.html with this -->
 <div id="claimModal" class="modal hidden">
     <div class="modal-content">
         <h3>Claim This Item</h3>
-        <textarea id="claimNotes" placeholder="Describe why this item is yours" required></textarea>
+        <textarea id="claimNotes" placeholder="Describe why this item is yours"></textarea>
+
+        <video id="claimCamera" autoplay playsinline class="claim-camera-preview"></video>
+        <canvas id="claimCanvas" class="hidden"></canvas>
+        <img id="claimPhotoPreview" class="claim-camera-preview hidden" alt="Captured photo">
+
+        <button type="button" id="capturePhotoBtn">Capture Photo</button>
+        <button type="button" id="retakePhotoBtn" class="hidden">Retake</button>
+
         <input type="hidden" id="claimItemID">
         <button type="button" id="submitClaimBtn">Submit Claim</button>
         <button type="button" id="cancelClaimBtn">Cancel</button>

@@ -53,6 +53,20 @@ buttons.forEach(function (btn) {
     });
 });
 
+// ---------- IMAGE LIGHTBOX ----------
+// Shared by both claim images and item images — click any thumbnail to
+// view it enlarged, click the overlay (or the image itself) again to close.
+function openLightbox(imageUrl) {
+    if (!imageUrl) return;
+    const lightbox = document.getElementById("imageLightbox");
+    document.getElementById("lightboxImage").src = imageUrl;
+    lightbox.classList.remove("hidden");
+}
+
+document.getElementById("imageLightbox").addEventListener("click", function () {
+    this.classList.add("hidden");
+});
+
 // ---------- PENDING CLAIMS ----------
 function loadPendingClaims() {
     fetch(`${API_BASE}/claims/pending`, { headers: authHeaders() })
@@ -91,19 +105,44 @@ function renderClaimQueue(claims) {
         const group = document.createElement("div");
         group.className = "claim-group";
         group.innerHTML = `
-            ${itemImage ? `<img src="${itemImage}" alt="${itemCategory || ''}" class="claim-group-image" onerror="this.style.display='none'">` : ''}
+            ${itemImage ? `<img src="${itemImage}" alt="${itemCategory || ''}" class="claim-group-image clickable-image" onerror="this.style.display='none'">` : ''}
             <h4>Item #${itemid}${itemCategory ? ` — ${itemCategory}` : ''}${itemClaims.length > 1 ? ` — ${itemClaims.length} competing claims` : ''}</h4>
         `;
+
+        // Wire up the click-to-enlarge on the item's own photo
+        const itemImgEl = group.querySelector(".claim-group-image");
+        if (itemImgEl) {
+            itemImgEl.addEventListener("click", function () {
+                openLightbox(itemImage);
+            });
+        }
 
         itemClaims.forEach(function (claim) {
             const card = document.createElement("div");
             card.className = "item-card";
+
+            const emailLink = claim.claimantEmail
+                ? `<a href="mailto:${claim.claimantEmail}">${claim.claimantEmail}</a>`
+                : "No email on file";
+            const phoneText = claim.claimantPhone || "No phone on file";
+
             card.innerHTML = `
                 <span class="status-badge">${claim.claimstatus}</span>
                 <p>Claimed by ${claim.claimantUsername ? claim.claimantUsername : ''} (user #${claim.claimuserid})</p>
+                <p>Phone: ${phoneText}</p>
+                <p>Email: ${emailLink}</p>
                 <p>Date: ${claim.claimdate}</p>
                 <p>${claim.verificationnotes || 'No description provided'}</p>
+                ${claim.claimImage ? `<img src="${claim.claimImage}" alt="Claim evidence" class="claim-evidence-image clickable-image" onerror="this.style.display='none'">` : ''}
             `;
+
+            // Wire up the click-to-enlarge on the claimant's evidence photo, if any
+            const evidenceImgEl = card.querySelector(".claim-evidence-image");
+            if (evidenceImgEl) {
+                evidenceImgEl.addEventListener("click", function () {
+                    openLightbox(claim.claimImage);
+                });
+            }
 
             const actions = document.createElement("div");
             actions.className = "claim-actions";
@@ -158,8 +197,10 @@ function reviewClaim(claimID, action) {
 }
 
 // ---------- ALL ITEMS ----------
+// Uses /admin/items (not /items) so it can also show reporter contact info —
+// that route is admin-only, keeping phone/email hidden from regular users.
 function loadAllItems() {
-    fetch(`${API_BASE}/items`)
+    fetch(`${API_BASE}/admin/items`, { headers: authHeaders() })
         .then(handleApiResponse)
         .then(function (items) { renderAllItems(items); })
         .catch(function (error) {
@@ -181,14 +222,30 @@ function renderAllItems(items) {
     items.forEach(function (item) {
         const card = document.createElement("div");
         card.className = "item-card";
+
+        const emailLink = item.reportedByEmail
+            ? `<a href="mailto:${item.reportedByEmail}">${item.reportedByEmail}</a>`
+            : "No email on file";
+        const phoneText = item.reportedByPhone || "No phone on file";
+
         card.innerHTML = `
-            <img src="${item.image || ''}" alt="${item.category}" onerror="this.style.display='none'">
+            <img src="${item.image || ''}" alt="${item.category}" class="clickable-image" onerror="this.style.display='none'">
             <span class="status-badge">${item.status}</span>
             <h4>${item.category} <span class="item-id-tag">#${item.itemID}</span></h4>
             ${item.location ? `<p>Location: ${item.location}</p>` : ''}
             <p>${item.date ? new Date(item.date).toLocaleDateString() : ''}</p>
             <p>Reported by ${item.reportedByUsername ? item.reportedByUsername : ''} (user #${item.reportedByUserID || ''})</p>
+            <p>Phone: ${phoneText}</p>
+            <p>Email: ${emailLink}</p>
         `;
+
+        const imgEl = card.querySelector("img.clickable-image");
+        if (imgEl && item.image) {
+            imgEl.addEventListener("click", function () {
+                openLightbox(item.image);
+            });
+        }
+
         container.appendChild(card);
     });
 }

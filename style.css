@@ -423,3 +423,13 @@ textarea:focus {
     width: 100%;
     margin-top: 0;
 }
+
+.claim-camera-preview {
+    width: 100%;
+    max-height: 220px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 2px solid #b30000;
+    margin-bottom: 8px;
+    background-color: #000;
+}

@@ -314,33 +314,103 @@ function deleteItem(itemID) {
     });
 }
 
-// ---------- CLAIM SUBMISSION ----------
+// ---------- CAMERA CAPTURE (for claim evidence) ----------
+const claimVideo = document.getElementById("claimCamera");
+const claimCanvas = document.getElementById("claimCanvas");
+const claimPreview = document.getElementById("claimPhotoPreview");
+const captureBtn = document.getElementById("capturePhotoBtn");
+const retakeBtn = document.getElementById("retakePhotoBtn");
+
+let claimStream = null;
+let capturedPhotoBlob = null;
+
+async function startClaimCamera() {
+    try {
+        claimStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: "environment" },
+            audio: false
+        });
+        claimVideo.srcObject = claimStream;
+    } catch (error) {
+        console.error("Camera error:", error);
+        alert("Unable to access camera: " + error.message);
+    }
+}
+
+function stopClaimCamera() {
+    if (claimStream) {
+        claimStream.getTracks().forEach(function (track) { track.stop(); });
+        claimVideo.srcObject = null;
+        claimStream = null;
+    }
+}
+
+function resetClaimPhotoUI() {
+    capturedPhotoBlob = null;
+    claimPreview.src = "";
+    claimPreview.classList.add("hidden");
+    retakeBtn.classList.add("hidden");
+    claimVideo.classList.remove("hidden");
+    captureBtn.classList.remove("hidden");
+}
+
+captureBtn.addEventListener("click", function () {
+    claimCanvas.width = claimVideo.videoWidth;
+    claimCanvas.height = claimVideo.videoHeight;
+    claimCanvas.getContext("2d").drawImage(claimVideo, 0, 0);
+
+    claimCanvas.toBlob(function (blob) {
+        capturedPhotoBlob = blob;
+        claimPreview.src = URL.createObjectURL(blob);
+
+        // Swap live feed for the still preview so the user can review the shot
+        claimVideo.classList.add("hidden");
+        captureBtn.classList.add("hidden");
+        claimPreview.classList.remove("hidden");
+        retakeBtn.classList.remove("hidden");
+    }, "image/jpeg", 0.9);
+});
+
+retakeBtn.addEventListener("click", function () {
+    resetClaimPhotoUI();
+});
+
+// ---------- CLAIM MODAL OPEN/CLOSE ----------
 function openClaimModal(itemID) {
     document.getElementById("claimItemID").value = itemID;
     document.getElementById("claimNotes").value = "";
+    resetClaimPhotoUI();
     document.getElementById("claimModal").classList.remove("hidden");
+    startClaimCamera();
 }
 
 function closeClaimModal() {
+    stopClaimCamera();
     document.getElementById("claimModal").classList.add("hidden");
 }
 
 document.getElementById("cancelClaimBtn").addEventListener("click", closeClaimModal);
 
+// ---------- CLAIM SUBMISSION ----------
 document.getElementById("submitClaimBtn").addEventListener("click", function () {
+    if (!capturedPhotoBlob) {
+        alert("Please capture a photo before submitting your claim.");
+        return;
+    }
+
     if (!confirm("Submit this claim?")) return;
 
-    const claimData = {
-        itemid: document.getElementById("claimItemID").value,
-        verificationnotes: document.getElementById("claimNotes").value,
-        claimdate: new Date().toISOString().split("T")[0],
-        claimstatus: "Pending"
-    };
+    const formData = new FormData();
+    formData.append("itemid", document.getElementById("claimItemID").value);
+    formData.append("verificationnotes", document.getElementById("claimNotes").value);
+    formData.append("claimdate", new Date().toISOString());
+    formData.append("claimstatus", "Pending");
+    formData.append("image", capturedPhotoBlob, "claim_photo.jpg");
 
     fetch(`${API_BASE}/claims`, {
         method: "POST",
-        headers: authHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify(claimData)
+        headers: authHeaders(), // no Content-Type here — browser sets multipart boundary automatically
+        body: formData
     })
     .then(function (response) { return response.json(); })
     .then(function (data) {

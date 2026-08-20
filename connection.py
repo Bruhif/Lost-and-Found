@@ -340,7 +340,7 @@ def verify_email():
 from collections import defaultdict
 
 _login_attempts = defaultdict(list)  # { ip_address: [timestamp, timestamp, ...] }
-RATE_LIMIT_MAX_ATTEMPTS = 4
+RATE_LIMIT_MAX_ATTEMPTS = 5
 RATE_LIMIT_WINDOW_SECONDS = 60
 
 def check_rate_limit(ip_address):
@@ -1017,7 +1017,10 @@ def send_claim_notification(to_email, approved, category):
     msg["To"] = to_email
 
     if approved:
-        msg.set_content(f"Good news! Your claim for '{category}' has been approved.")
+        msg.set_content(
+            f"Good news! Your claim for '{category}' has been approved.\n\n"
+            f"Please come to the library to collect your item. Bring a valid ID for verification."
+        )
     else:
         msg.set_content(f"Your claim for '{category}' was not approved. Contact the admin office for details.")
 
