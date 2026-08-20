@@ -14,9 +14,6 @@ document.getElementById("loginForm").addEventListener("submit", function(event) 
         body: JSON.stringify({ username, password })
     })
     .then(function (response) {
-        // Rate limiting returns 429 with a JSON body — still parse it below
-        // rather than treating it as a hard network failure, so the real
-        // "please wait a minute" message actually reaches the user.
         return response.json();
     })
     .then(function (data) {
@@ -25,8 +22,6 @@ document.getElementById("loginForm").addEventListener("submit", function(event) 
             return;
         }
 
-        // /login returns either a "user" or an "admin" object depending on
-        // which table matched — route based on whichever one is present.
         if (data.user) {
             localStorage.setItem("userID", data.user.id);
             localStorage.setItem("usertype", data.user.usertype);

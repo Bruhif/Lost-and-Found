@@ -760,6 +760,43 @@ def get_items():
             "error": str(e)
         }), 500
 
+@app.route("/admin/items", methods=["GET"])
+@require_auth(role="admin")
+def get_admin_items():
+    try:
+        with db_cursor() as (conn, cursor):
+            # Unlike the public /items list, admins should see every report —
+            # including ones with an approved claim — so nothing is filtered out.
+            cursor.execute(
+                """
+                SELECT i.itemid, i.category, i.status, i.image, i.location, i.date,
+                       i.reportedbyuserid, u.username, u.email, u.phone_number
+                FROM itemlist i
+                LEFT JOIN users u ON i.reportedbyuserid = u.userid
+                ORDER BY i.date DESC;
+                """
+            )
+            rows = cursor.fetchall()
+
+        return jsonify([
+            {
+                "itemID": row[0],
+                "category": row[1],
+                "status": row[2],
+                "image": row[3],
+                "location": row[4],
+                "date": row[5].isoformat() if row[5] else None,
+                "reportedByUserID": row[6],
+                "reportedByUsername": row[7],
+                "reportedByEmail": row[8],
+                "reportedByPhone": row[9]
+            }
+            for row in rows
+        ])
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
 @app.route("/debug/schema", methods=["GET"])
 def debug_schema():
     try:
@@ -981,7 +1018,7 @@ def get_pending_claims():
             cursor.execute(
                 """
                 SELECT c.claimid, c.itemid, c.claimuserid, c.verificationnotes, c.claimdate, c.claimstatus,
-                       i.image, i.category, u.username
+                       i.image, i.category, u.username, u.email, u.phone_number
                 FROM claims c
                 JOIN itemlist i ON c.itemid = i.itemid
                 JOIN users u ON c.claimuserid = u.userid
@@ -996,7 +1033,8 @@ def get_pending_claims():
                 "claimid": r[0], "itemid": r[1], "claimuserid": r[2],
                 "verificationnotes": r[3],
                 "claimdate": r[4].isoformat() if r[4] else None, "claimstatus": r[5],
-                "itemImage": r[6], "itemCategory": r[7], "claimantUsername": r[8]
+                "itemImage": r[6], "itemCategory": r[7], "claimantUsername": r[8],
+                "claimantEmail": r[9], "claimantPhone": r[10]
             }
             for r in rows
         ])

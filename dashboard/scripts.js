@@ -3,20 +3,24 @@ console.log("dashboard.js loaded");
 const API_BASE = "https://legion-is-here.tail208289.ts.net";
 const currentUserID = localStorage.getItem("userID");
 const authToken = localStorage.getItem("token");
+const claimVideo = document.getElementById("claimCamera");
+const claimCanvas = document.getElementById("claimCanvas");
+const claimPreview = document.getElementById("claimPhotoPreview");
+const captureBtn = document.getElementById("capturePhotoBtn");
+const retakeBtn = document.getElementById("retakePhotoBtn");
+
+let claimStream = null;
+let capturedPhotoBlob = null;
 
 if (!currentUserID || !authToken) {
     alert("Please log in.");
-    window.location.href = "../login/"; // adjust path to match your project structure
+    window.location.href = "../login/";
 }
 
 function authHeaders(extra) {
     return Object.assign({ "Authorization": `Bearer ${authToken}` }, extra || {});
 }
 
-// <input type="date"> only ever returns a date string (no time component at
-// all), so sending it straight to the backend always inserts 00:00:00. This
-// combines the user's picked date with the current time-of-day at submit,
-// so items reported the same day still get distinct, sortable timestamps.
 function dateWithCurrentTime(dateStr) {
     const now = new Date();
     const [year, month, day] = dateStr.split("-").map(Number);
@@ -24,13 +28,6 @@ function dateWithCurrentTime(dateStr) {
     return combined.toISOString();
 }
 
-// Every GET endpoint that feeds a render function expects an array back on
-// success. If the token is missing/expired, or something else goes wrong,
-// the server sends back {"success": false, "error": "..."} instead — an
-// object, not an array. Passed straight to something like renderClaims(),
-// `!claims.length` on that object is true (objects have no .length), so it
-// silently renders as "you have nothing" instead of surfacing the real
-// error. This handler catches that before it gets to the renderer.
 function handleApiResponse(response) {
     if (response.status === 401) {
         alert("Your session has expired. Please log in again.");
@@ -50,9 +47,8 @@ function handleApiResponse(response) {
     });
 }
 
-let allItems = []; // cache of the last /items fetch, used for count/sort/detail lookups
+let allItems = [];
 
-// ---------- TAB SWITCHING ----------
 const buttons = document.querySelectorAll(".tab-btn");
 const sections = document.querySelectorAll(".tab-section");
 
@@ -69,9 +65,6 @@ buttons.forEach(function (btn) {
     });
 });
 
-// ---------- FORM VALIDATION HELPERS ----------
-// Returns true if the date is valid (not empty, not in the future), false otherwise.
-// Writes a message into the given error <p> element either way.
 function validateNotFutureDate(dateValue, errorElementId) {
     const errorEl = document.getElementById(errorElementId);
     errorEl.textContent = "";
@@ -90,11 +83,6 @@ function validateNotFutureDate(dateValue, errorElementId) {
     return true;
 }
 
-// Default the lost/found date pickers to today so most people never have
-// to touch them, but leave them fully editable — e.g. for someone
-// reporting an item they actually found a few days ago. Also cap the
-// native picker at today via `max`, which reinforces the same "no future
-// dates" rule validateNotFutureDate() already checks on submit.
 (function setDefaultDates() {
     const todayStr = new Date().toISOString().split("T")[0];
 
@@ -107,7 +95,6 @@ function validateNotFutureDate(dateValue, errorElementId) {
     foundDateInput.max = todayStr;
 })();
 
-// ---------- REPORT LOST ITEM (with optional image) ----------
 document.getElementById("lostForm").addEventListener("submit", function (event) {
     event.preventDefault();
 
@@ -129,7 +116,7 @@ document.getElementById("lostForm").addEventListener("submit", function (event) 
 
     fetch(`${API_BASE}/add/lost`, {
         method: "POST",
-        headers: authHeaders(), // no Content-Type here — browser sets multipart boundary automatically
+        headers: authHeaders(),
         body: formData
     })
     .then(function (response) { return response.json(); })
@@ -144,7 +131,6 @@ document.getElementById("lostForm").addEventListener("submit", function (event) 
     });
 });
 
-// ---------- REPORT FOUND ITEM (with image upload) ----------
 document.getElementById("foundForm").addEventListener("submit", function (event) {
     event.preventDefault();
 
@@ -179,7 +165,6 @@ document.getElementById("foundForm").addEventListener("submit", function (event)
     });
 });
 
-// ---------- BROWSE / SEARCH / SORT / COUNT ----------
 function loadItems() {
     fetch(`${API_BASE}/items`)
         .then(handleApiResponse)
@@ -188,7 +173,7 @@ function loadItems() {
             applyFilters();
         })
         .catch(function (error) {
-            if (error.handled) return; // already alerted + redirected
+            if (error.handled) return;
             console.error("Error loading items:", error);
             alert(error.message || "Couldn't reach the server. Please check your connection and try again.");
         });
@@ -243,12 +228,10 @@ function renderItems(items) {
             <p>${item.date ? new Date(item.date).toLocaleDateString() : ''}</p>
         `;
 
-        // Clicking the card opens the detail view
         card.addEventListener("click", function () {
             openDetailModal(item);
         });
 
-        // Claim button, only for Found items, stops the card click from also firing
         if (item.status === "Found") {
             const claimBtn = document.createElement("button");
             claimBtn.textContent = "Claim This Item";
@@ -268,7 +251,6 @@ document.getElementById("searchBtn").addEventListener("click", applyFilters);
 document.getElementById("statusFilter").addEventListener("change", applyFilters);
 document.getElementById("sortFilter").addEventListener("change", applyFilters);
 
-// ---------- ITEM DETAIL MODAL (with Edit/Delete for the reporting user) ----------
 function openDetailModal(item) {
     document.getElementById("detailImage").src = item.image || "";
     document.getElementById("detailStatus").textContent = item.status;
@@ -283,7 +265,6 @@ function openDetailModal(item) {
     const ownerActions = document.getElementById("detailOwnerActions");
     ownerActions.innerHTML = "";
 
-    // Only the user who originally reported this item sees Edit/Delete
     if (String(item.reportedByUserID) === String(currentUserID)) {
         const actionsWrap = document.createElement("div");
         actionsWrap.className = "owner-actions";
@@ -325,15 +306,6 @@ function deleteItem(itemID) {
     });
 }
 
-// ---------- CAMERA CAPTURE (for claim evidence) ----------
-const claimVideo = document.getElementById("claimCamera");
-const claimCanvas = document.getElementById("claimCanvas");
-const claimPreview = document.getElementById("claimPhotoPreview");
-const captureBtn = document.getElementById("capturePhotoBtn");
-const retakeBtn = document.getElementById("retakePhotoBtn");
-
-let claimStream = null;
-let capturedPhotoBlob = null;
 
 async function startClaimCamera() {
     try {
@@ -374,7 +346,6 @@ captureBtn.addEventListener("click", function () {
         capturedPhotoBlob = blob;
         claimPreview.src = URL.createObjectURL(blob);
 
-        // Swap live feed for the still preview so the user can review the shot
         claimVideo.classList.add("hidden");
         captureBtn.classList.add("hidden");
         claimPreview.classList.remove("hidden");
@@ -386,7 +357,6 @@ retakeBtn.addEventListener("click", function () {
     resetClaimPhotoUI();
 });
 
-// ---------- CLAIM MODAL OPEN/CLOSE ----------
 function openClaimModal(itemID) {
     document.getElementById("claimItemID").value = itemID;
     document.getElementById("claimNotes").value = "";
@@ -402,7 +372,6 @@ function closeClaimModal() {
 
 document.getElementById("cancelClaimBtn").addEventListener("click", closeClaimModal);
 
-// ---------- CLAIM SUBMISSION ----------
 document.getElementById("submitClaimBtn").addEventListener("click", function () {
     if (!capturedPhotoBlob) {
         alert("Please capture a photo before submitting your claim.");
@@ -420,7 +389,7 @@ document.getElementById("submitClaimBtn").addEventListener("click", function () 
 
     fetch(`${API_BASE}/claims`, {
         method: "POST",
-        headers: authHeaders(), // no Content-Type here — browser sets multipart boundary automatically
+        headers: authHeaders(),
         body: formData
     })
     .then(function (response) { return response.json(); })
@@ -435,13 +404,12 @@ document.getElementById("submitClaimBtn").addEventListener("click", function () 
     });
 });
 
-// ---------- MY CLAIMS ----------
 function loadMyClaims() {
     fetch(`${API_BASE}/claims/me`, { headers: authHeaders() })
         .then(handleApiResponse)
         .then(function (claims) { renderClaims(claims); })
         .catch(function (error) {
-            if (error.handled) return; // already alerted + redirected
+            if (error.handled) return;
             console.error("Error loading claims:", error);
             alert(error.message || "Couldn't reach the server. Please check your connection and try again.");
         });
@@ -469,5 +437,4 @@ function renderClaims(claims) {
     });
 }
 
-// Load items on first page view
 loadItems();

@@ -6,16 +6,13 @@ const authToken = localStorage.getItem("adminToken");
 
 if (!currentAdminID || !authToken) {
     alert("Please log in as an admin.");
-    window.location.href = "../login/"; // adjust path to match your project structure
+    window.location.href = "../login/";
 }
 
 function authHeaders(extra) {
     return Object.assign({ "Authorization": `Bearer ${authToken}` }, extra || {});
 }
 
-// Shared by both the Pending Claims and All Reports contact-info rows.
-// Falls back to a manual prompt if the Clipboard API isn't available
-// (e.g. an insecure/non-HTTPS context some browsers restrict it on).
 function copyToClipboard(text, label) {
     if (!text) return;
 
@@ -28,10 +25,6 @@ function copyToClipboard(text, label) {
     }
 }
 
-// See scripts.js for why this exists: without it, an error response
-// (e.g. an expired token) gets handed straight to a render function that
-// expects an array, and silently displays as "nothing here" instead of
-// surfacing the real problem.
 function handleApiResponse(response) {
     if (response.status === 401 || response.status === 403) {
         alert("Your admin session has expired or is invalid. Please log in again.");
@@ -51,7 +44,6 @@ function handleApiResponse(response) {
     });
 }
 
-// ---------- TAB SWITCHING ----------
 const buttons = document.querySelectorAll(".tab-btn");
 const sections = document.querySelectorAll(".tab-section");
 
@@ -68,9 +60,6 @@ buttons.forEach(function (btn) {
     });
 });
 
-// ---------- IMAGE LIGHTBOX ----------
-// Shared by both claim images and item images — click any thumbnail to
-// view it enlarged, click the overlay (or the image itself) again to close.
 function openLightbox(imageUrl) {
     if (!imageUrl) return;
     const lightbox = document.getElementById("imageLightbox");
@@ -82,7 +71,6 @@ document.getElementById("imageLightbox").addEventListener("click", function () {
     this.classList.add("hidden");
 });
 
-// ---------- PENDING CLAIMS ----------
 function loadPendingClaims() {
     fetch(`${API_BASE}/claims/pending`, { headers: authHeaders() })
         .then(handleApiResponse)
@@ -94,9 +82,6 @@ function loadPendingClaims() {
         });
 }
 
-// Groups claims by item so competing claims on the same Found item render
-// together — that's the whole point of Option B: the admin needs to see
-// every claimant on an item side by side to judge who's telling the truth.
 function renderClaimQueue(claims) {
     const container = document.getElementById("claimQueue");
     container.innerHTML = "";
@@ -124,7 +109,6 @@ function renderClaimQueue(claims) {
             <h4>Item #${itemid}${itemCategory ? ` — ${itemCategory}` : ''}${itemClaims.length > 1 ? ` — ${itemClaims.length} competing claims` : ''}</h4>
         `;
 
-        // Wire up the click-to-enlarge on the item's own photo
         const itemImgEl = group.querySelector(".claim-group-image");
         if (itemImgEl) {
             itemImgEl.addEventListener("click", function () {
@@ -155,14 +139,12 @@ function renderClaimQueue(claims) {
                 ${claim.claimImage ? `<img src="${claim.claimImage}" alt="Claim evidence" class="claim-evidence-image clickable-image" onerror="this.style.display='none'">` : ''}
             `;
 
-            // Wire up every copy button rendered into this card
             card.querySelectorAll(".copy-btn").forEach(function (btn) {
                 btn.addEventListener("click", function () {
                     copyToClipboard(btn.dataset.copy, btn.dataset.label);
                 });
             });
 
-            // Wire up the click-to-enlarge on the claimant's evidence photo, if any
             const evidenceImgEl = card.querySelector(".claim-evidence-image");
             if (evidenceImgEl) {
                 evidenceImgEl.addEventListener("click", function () {
@@ -199,10 +181,6 @@ function renderClaimQueue(claims) {
     });
 }
 
-// Approving one claim auto-rejects every other pending claim on the same
-// item server-side (see _review_claim in connection.py) — that's also
-// why we just reload the whole queue after either action, rather than
-// only removing the one card that was acted on.
 function reviewClaim(claimID, action) {
     const label = action === "approve" ? "approve" : "reject";
     if (!confirm(`Are you sure you want to ${label} this claim?`)) return;
@@ -222,9 +200,6 @@ function reviewClaim(claimID, action) {
     });
 }
 
-// ---------- ALL ITEMS ----------
-// Uses /admin/items (not /items) so it can also show reporter contact info —
-// that route is admin-only, keeping phone/email hidden from regular users.
 function loadAllItems() {
     fetch(`${API_BASE}/admin/items`, { headers: authHeaders() })
         .then(handleApiResponse)
@@ -286,5 +261,4 @@ function renderAllItems(items) {
     });
 }
 
-// Load pending claims on first page view
 loadPendingClaims();

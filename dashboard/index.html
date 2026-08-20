@@ -17,7 +17,6 @@
         <button class="tab-btn" data-tab="myClaims">My Claims</button>
     </nav>
 
-    <!-- BROWSE / SEARCH -->
     <section id="browse" class="tab-section active">
         <div id="itemCount" class="stats-bar"></div>
         <div class="filter-bar">
@@ -36,7 +35,6 @@
         <div id="itemList" class="item-grid"></div>
     </section>
 
-    <!-- REPORT LOST -->
     <section id="reportLost" class="tab-section">
         <h2>Report a Lost Item</h2>
         <form id="lostForm">
@@ -49,7 +47,6 @@
         </form>
     </section>
 
-    <!-- REPORT FOUND -->
     <section id="reportFound" class="tab-section">
         <h2>Report a Found Item</h2>
         <form id="foundForm">
@@ -62,14 +59,11 @@
         </form>
     </section>
 
-    <!-- MY CLAIMS -->
     <section id="myClaims" class="tab-section">
         <h2>My Claims</h2>
         <div id="claimList" class="item-grid"></div>
     </section>
 
-<!-- CLAIM MODAL -->
-<!-- Replace the existing #claimModal in dashboard.html with this -->
 <div id="claimModal" class="modal hidden">
     <div class="modal-content">
         <h3>Claim This Item</h3>
@@ -88,7 +82,6 @@
     </div>
 </div>
 
-    <!-- ITEM DETAIL MODAL -->
     <div id="detailModal" class="modal hidden">
         <div class="modal-content">
             <img id="detailImage" src="" alt="" onerror="this.style.display='none'">
