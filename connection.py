@@ -839,7 +839,11 @@ def save_uploaded_image(image_file):
     unique_name = f"{uuid.uuid4().hex}_{original_name}"
     save_path = os.path.join(UPLOAD_FOLDER, unique_name)
     image_file.save(save_path)
-    return f"{request.host_url}uploads/{unique_name}"
+    # request.host_url is "http://..." because the Tailscale tunnel terminates
+    # TLS and forwards to Flask over plain HTTP — Flask never sees the https
+    # the browser actually used. Force it so links we hand back don't 404/refuse.
+    host = request.host_url.replace("http://", "https://", 1)
+    return f"{host}uploads/{unique_name}"
 
 @app.route("/add/lost", methods=["POST"])
 @require_auth(role="user")
@@ -950,27 +954,34 @@ def delete_item(item_id):
 @app.route("/claims", methods=["POST"])
 @require_auth(role="user")
 def add_claim():
-    data = get_json_body()
-    if data is None:
-        return jsonify({"success": False, "error": "Request body must be a JSON object"}), 400
-
-    itemid = data.get("itemid")
+    # The frontend sends this as FormData (it includes the verification photo
+    # taken via the camera), i.e. multipart/form-data — not JSON — so this
+    # reads request.form/request.files like add_lost/add_found do, instead of
+    # get_json_body(), which was rejecting every claim submission.
+    itemid = request.form.get("itemid")
     claimuserid = g.user_id  # from the verified token, not the request body
-    verificationnotes = data.get("verificationnotes")
-    claimdate = data.get("claimdate")
-    claimstatus = data.get("claimstatus", "Pending")
+    verificationnotes = request.form.get("verificationnotes")
+    claimdate = request.form.get("claimdate")
+    claimstatus = request.form.get("claimstatus", "Pending")
 
     if not itemid or not claimdate:
         return jsonify({"success": False, "error": "Required fields missing"}), 400
 
+    idcard_file = request.files.get("idcard")
+    if not idcard_file or not idcard_file.filename:
+        return jsonify({"success": False, "error": "Student ID card photo is required"}), 400
+
     try:
+        verificationphoto = save_uploaded_image(request.files.get("image"))
+        studentidcard = save_uploaded_image(idcard_file)
+
         with db_cursor() as (conn, cursor):
             query = """
-                INSERT INTO claims (itemid, claimuserid, verificationnotes, claimdate, claimstatus)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO claims (itemid, claimuserid, verificationnotes, claimdate, claimstatus, verificationphoto, studentidcard)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 RETURNING claimid;
             """
-            cursor.execute(query, (itemid, claimuserid, verificationnotes, claimdate, claimstatus))
+            cursor.execute(query, (itemid, claimuserid, verificationnotes, claimdate, claimstatus, verificationphoto, studentidcard))
             claim_id = cursor.fetchone()[0]
 
         return jsonify({
@@ -989,7 +1000,7 @@ def get_user_claims():
         with db_cursor() as (conn, cursor):
             cursor.execute(
                 """
-                SELECT claimid, itemid, claimuserid, verificationnotes, claimdate, claimstatus
+                SELECT claimid, itemid, claimuserid, verificationnotes, claimdate, claimstatus, verificationphoto, studentidcard
                 FROM claims
                 WHERE claimuserid = %s
                 ORDER BY claimdate DESC;
@@ -1002,7 +1013,8 @@ def get_user_claims():
             {
                 "claimid": r[0], "itemid": r[1], "claimuserid": r[2],
                 "verificationnotes": r[3],
-                "claimdate": r[4].isoformat() if r[4] else None, "claimstatus": r[5]
+                "claimdate": r[4].isoformat() if r[4] else None, "claimstatus": r[5],
+                "verificationPhoto": r[6], "studentIDCard": r[7]
             }
             for r in rows
         ])
@@ -1017,7 +1029,7 @@ def get_pending_claims():
         with db_cursor() as (conn, cursor):
             cursor.execute(
                 """
-                SELECT c.claimid, c.itemid, c.claimuserid, c.verificationnotes, c.claimdate, c.claimstatus,
+                SELECT c.claimid, c.itemid, c.claimuserid, c.verificationnotes, c.claimdate, c.claimstatus, c.verificationphoto, c.studentidcard,
                        i.image, i.category, u.username, u.email, u.phone_number
                 FROM claims c
                 JOIN itemlist i ON c.itemid = i.itemid
@@ -1033,8 +1045,9 @@ def get_pending_claims():
                 "claimid": r[0], "itemid": r[1], "claimuserid": r[2],
                 "verificationnotes": r[3],
                 "claimdate": r[4].isoformat() if r[4] else None, "claimstatus": r[5],
-                "itemImage": r[6], "itemCategory": r[7], "claimantUsername": r[8],
-                "claimantEmail": r[9], "claimantPhone": r[10]
+                "verificationPhoto": r[6], "studentIDCard": r[7],
+                "itemImage": r[8], "itemCategory": r[9], "claimantUsername": r[10],
+                "claimantEmail": r[11], "claimantPhone": r[12]
             }
             for r in rows
         ])
@@ -1057,7 +1070,7 @@ def send_claim_notification(to_email, approved, category):
     if approved:
         msg.set_content(
             f"Good news! Your claim for '{category}' has been approved.\n\n"
-            f"Please come to the library to collect your item. Bring a valid ID for verification."
+            f"Please come to the library during office hours 08:00-17:00 to collect your item. Bring a valid ID for verification."
         )
     else:
         msg.set_content(f"Your claim for '{category}' was not approved. Contact the admin office for details.")

@@ -135,8 +135,16 @@ function renderClaimQueue(claims) {
                     ${claim.claimantEmail ? `<button type="button" class="copy-btn" data-copy="${claim.claimantEmail}" data-label="Email">Copy</button>` : ''}
                 </p>
                 <p>Date: ${claim.claimdate}</p>
+                <p class="evidence-label">Reason given:</p>
                 <p>${claim.verificationnotes || 'No description provided'}</p>
-                ${claim.claimImage ? `<img src="${claim.claimImage}" alt="Claim evidence" class="claim-evidence-image clickable-image" onerror="this.style.display='none'">` : ''}
+                ${claim.verificationPhoto ? `
+                    <p class="evidence-label">Selfie verification:</p>
+                    <img src="${claim.verificationPhoto}" alt="Verification selfie" class="claim-evidence-image clickable-image" onerror="this.style.display='none'">
+                ` : ''}
+                ${claim.studentIDCard ? `
+                    <p class="evidence-label">Student ID card:</p>
+                    <img src="${claim.studentIDCard}" alt="Student ID card" class="claim-idcard-image clickable-image" onerror="this.style.display='none'">
+                ` : ''}
             `;
 
             card.querySelectorAll(".copy-btn").forEach(function (btn) {
@@ -145,10 +153,17 @@ function renderClaimQueue(claims) {
                 });
             });
 
-            const evidenceImgEl = card.querySelector(".claim-evidence-image");
-            if (evidenceImgEl) {
-                evidenceImgEl.addEventListener("click", function () {
-                    openLightbox(claim.claimImage);
+            const selfieImgEl = card.querySelector(".claim-evidence-image");
+            if (selfieImgEl) {
+                selfieImgEl.addEventListener("click", function () {
+                    openLightbox(claim.verificationPhoto);
+                });
+            }
+
+            const idCardImgEl = card.querySelector(".claim-idcard-image");
+            if (idCardImgEl) {
+                idCardImgEl.addEventListener("click", function () {
+                    openLightbox(claim.studentIDCard);
                 });
             }
 

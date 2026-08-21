@@ -8,6 +8,19 @@ const claimCanvas = document.getElementById("claimCanvas");
 const claimPreview = document.getElementById("claimPhotoPreview");
 const captureBtn = document.getElementById("capturePhotoBtn");
 const retakeBtn = document.getElementById("retakePhotoBtn");
+const claimModal = document.getElementById("claimModal");
+const claimPhotoModal = document.getElementById("claimPhotoModal");
+
+// Toggle both the class AND inline display, so hide/show works even if a
+// stylesheet rule elsewhere ends up overriding the ".hidden" class.
+function showEl(el) {
+    el.classList.remove("hidden");
+    el.style.removeProperty("display");
+}
+function hideEl(el) {
+    el.classList.add("hidden");
+    el.style.display = "none";
+}
 
 let claimStream = null;
 let capturedPhotoBlob = null;
@@ -19,6 +32,12 @@ if (!currentUserID || !authToken) {
 
 function authHeaders(extra) {
     return Object.assign({ "Authorization": `Bearer ${authToken}` }, extra || {});
+}
+
+// The API sometimes returns image URLs as http://, but the Tailscale tunnel
+// only serves https (port 443), so those requests get refused. Upgrade them.
+function toSecureUrl(url) {
+    return url ? url.replace(/^http:\/\//i, "https://") : url;
 }
 
 function dateWithCurrentTime(dateStr) {
@@ -220,7 +239,7 @@ function renderItems(items) {
         const card = document.createElement("div");
         card.className = "item-card";
         card.innerHTML = `
-            <img src="${item.image || ''}" alt="${item.category}"
+            <img src="${toSecureUrl(item.image) || ''}" alt="${item.category}"
                  onerror="this.style.display='none'">
             <span class="status-badge">${item.status}</span>
             <h4>${item.category}</h4>
@@ -252,7 +271,7 @@ document.getElementById("statusFilter").addEventListener("change", applyFilters)
 document.getElementById("sortFilter").addEventListener("change", applyFilters);
 
 function openDetailModal(item) {
-    document.getElementById("detailImage").src = item.image || "";
+    document.getElementById("detailImage").src = toSecureUrl(item.image) || "";
     document.getElementById("detailStatus").textContent = item.status;
     document.getElementById("detailCategory").textContent = item.category;
     document.getElementById("detailLocation").textContent = item.location
@@ -331,10 +350,11 @@ function stopClaimCamera() {
 function resetClaimPhotoUI() {
     capturedPhotoBlob = null;
     claimPreview.src = "";
-    claimPreview.classList.add("hidden");
-    retakeBtn.classList.add("hidden");
-    claimVideo.classList.remove("hidden");
-    captureBtn.classList.remove("hidden");
+    hideEl(claimPreview);
+    hideEl(retakeBtn);
+    hideEl(claimCanvas);
+    showEl(claimVideo);
+    showEl(captureBtn);
 }
 
 captureBtn.addEventListener("click", function () {
@@ -346,10 +366,11 @@ captureBtn.addEventListener("click", function () {
         capturedPhotoBlob = blob;
         claimPreview.src = URL.createObjectURL(blob);
 
-        claimVideo.classList.add("hidden");
-        captureBtn.classList.add("hidden");
-        claimPreview.classList.remove("hidden");
-        retakeBtn.classList.remove("hidden");
+        hideEl(claimVideo);
+        hideEl(captureBtn);
+        hideEl(claimCanvas);
+        showEl(claimPreview);
+        showEl(retakeBtn);
     }, "image/jpeg", 0.9);
 });
 
@@ -360,21 +381,49 @@ retakeBtn.addEventListener("click", function () {
 function openClaimModal(itemID) {
     document.getElementById("claimItemID").value = itemID;
     document.getElementById("claimNotes").value = "";
+    document.getElementById("claimIDCard").value = "";
+    claimModal.classList.remove("hidden");
+}
+
+document.getElementById("cancelClaimBtn").addEventListener("click", function () {
+    claimModal.classList.add("hidden");
+});
+
+document.getElementById("claimNextBtn").addEventListener("click", function () {
+    const notes = document.getElementById("claimNotes").value.trim();
+    if (!notes) {
+        alert("Please describe why this item is yours.");
+        return;
+    }
+
+    const idCardFile = document.getElementById("claimIDCard").files[0];
+    if (!idCardFile) {
+        alert("Please upload a photo of your student ID card.");
+        return;
+    }
+
+    claimModal.classList.add("hidden");
     resetClaimPhotoUI();
-    document.getElementById("claimModal").classList.remove("hidden");
+    claimPhotoModal.classList.remove("hidden");
     startClaimCamera();
-}
+});
 
-function closeClaimModal() {
+function closeClaimPhotoModal() {
     stopClaimCamera();
-    document.getElementById("claimModal").classList.add("hidden");
+    claimPhotoModal.classList.add("hidden");
 }
 
-document.getElementById("cancelClaimBtn").addEventListener("click", closeClaimModal);
+document.getElementById("cancelClaimPhotoBtn").addEventListener("click", closeClaimPhotoModal);
 
 document.getElementById("submitClaimBtn").addEventListener("click", function () {
     if (!capturedPhotoBlob) {
         alert("Please capture a photo before submitting your claim.");
+        return;
+    }
+
+    const idCardFile = document.getElementById("claimIDCard").files[0];
+    if (!idCardFile) {
+        alert("Please upload a photo of your student ID card.");
         return;
     }
 
@@ -386,6 +435,7 @@ document.getElementById("submitClaimBtn").addEventListener("click", function () 
     formData.append("claimdate", new Date().toISOString());
     formData.append("claimstatus", "Pending");
     formData.append("image", capturedPhotoBlob, "claim_photo.jpg");
+    formData.append("idcard", idCardFile);
 
     fetch(`${API_BASE}/claims`, {
         method: "POST",
@@ -395,7 +445,7 @@ document.getElementById("submitClaimBtn").addEventListener("click", function () 
     .then(function (response) { return response.json(); })
     .then(function (data) {
         alert(data.message || data.error);
-        closeClaimModal();
+        closeClaimPhotoModal();
         loadItems();
     })
     .catch(function (error) {
